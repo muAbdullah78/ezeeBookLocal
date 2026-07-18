@@ -504,4 +504,22 @@ class DatabaseHelper {
     await db.delete('orders');
     await db.delete('customers');
   }
+
+  /// Fully clear the local database by closing it and deleting the file.
+  ///
+  /// Used by account deletion: after the server has irrevocably removed all
+  /// cloud data, we wipe the local SQLite file entirely so that the next
+  /// login (any account) starts from a fresh, correctly-versioned schema.
+  /// The singleton handle is reset so [database] re-creates the file lazily.
+  Future<void> clearAllData() async {
+    final dbPath = await getDatabasesPath();
+    final path = join(dbPath, 'ezeebook.db');
+
+    // Close the open handle first so the file is not locked on delete.
+    if (_database != null) {
+      await _database!.close();
+      _database = null;
+    }
+    await deleteDatabase(path);
+  }
 }

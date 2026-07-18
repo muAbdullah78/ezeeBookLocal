@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/database/sync_service.dart';
 import '../../../core/services/subscription_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../account/screens/delete_account_screen.dart';
 import '../../auth/providers/auth_service.dart';
 import '../../auth/screens/login_screen.dart';
 import 'about_screen.dart';
@@ -142,101 +141,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   void _handleDeleteAccount(BuildContext context) {
-    final confirmController = TextEditingController();
-    final isUrdu = context.locale.languageCode == 'ur';
-    final requiredWord = isUrdu ? 'حذف' : 'DELETE';
-
-    showDialog(
-      context: context,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setDialogState) {
-            final matches = confirmController.text.trim() == requiredWord;
-            return AlertDialog(
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.error, size: 28),
-                  const SizedBox(width: 8),
-                  Expanded(child: Text('delete_account_confirm'.tr())),
-                ],
-              ),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'delete_account_warning'.tr(),
-                    style: const TextStyle(fontSize: 14, color: AppColors.textSecondary),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: confirmController,
-                    onChanged: (_) => setDialogState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'type_delete_confirm'.tr(),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                    textDirection: isUrdu ? TextDirection.rtl : TextDirection.ltr,
-                  ),
-                ],
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: Text('cancel'.tr()),
-                ),
-                ElevatedButton(
-                  onPressed: matches
-                      ? () async {
-                          Navigator.of(ctx).pop();
-                          await _performAccountDeletion();
-                        }
-                      : null,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.error,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppColors.textHint,
-                  ),
-                  child: Text('delete_forever'.tr()),
-                ),
-              ],
-            );
-          },
-        );
-      },
+    Navigator.of(context).push(
+      SlidePageRoute(page: const DeleteAccountScreen()),
     );
-  }
-
-  Future<void> _performAccountDeletion() async {
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (_) => const Center(child: CircularProgressIndicator()),
-    );
-
-    try {
-      await SyncService().deleteAllUserData();
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.clear();
-      await AuthService().signOut();
-
-      if (mounted) {
-        Navigator.of(context).pop();
-        Navigator.of(context).pushAndRemoveUntil(
-          SlidePageRoute(page: const LoginScreen()),
-          (route) => false,
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        Navigator.of(context).pop();
-        SnackbarHelper.showError(context, 'auth_something_wrong'.tr());
-      }
-    }
   }
 
   Future<void> _fetchSubscriptionPaymentMethod() async {
