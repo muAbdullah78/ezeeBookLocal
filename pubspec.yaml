@@ -1,0 +1,67 @@
+name: ezeebook
+description: "EzeeBook - Tailor Shop Management App"
+publish_to: 'none'
+version: 1.0.0+3
+
+environment:
+  sdk: ^3.7.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Local Database
+  sqflite: ^2.4.1
+  path: ^1.9.0
+
+  # Cloud Backend
+  supabase_flutter: ^2.8.2
+
+  # Crash reporting
+  sentry_flutter: ^9.0.0
+
+  # Internationalization (English + Urdu)
+  easy_localization: ^3.0.7
+
+  # WhatsApp & URLs
+  url_launcher: ^6.3.1
+
+  # HTTP — used for connectivity reachability probe
+  http: ^1.6.0
+
+  # Utilities
+  intl: 0.20.2
+  uuid: ^4.5.1
+  permission_handler: ^11.3.1
+  shared_preferences: ^2.3.4
+  connectivity_plus: ^7.1.0
+  sqflite_common_ffi: ^2.4.0+2
+  speech_to_text: ^7.3.0
+  pdf: ^3.12.0
+  printing: ^5.14.3
+  share_plus: ^12.0.1
+  path_provider: ^2.1.5
+  flutter_native_splash: ^2.4.7
+  in_app_purchase: ^3.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+  build_runner: ^2.4.14
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/images/
+    - assets/fonts/
+    - lib/l10n/
+
+  fonts:
+    - family: NotoNastaliqUrdu
+      fonts:
+        - asset: assets/fonts/NotoNastaliqUrdu-Regular.ttf
+        - asset: assets/fonts/NotoNastaliqUrdu-Bold.ttf
+          weight: 700

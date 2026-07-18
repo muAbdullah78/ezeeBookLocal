@@ -1,0 +1,7 @@
+flutter_launcher_icons:
+  android: true
+  ios: false
+  min_sdk_android: 26
+  remove_alpha_ios: true
+  background_color: "#26A69A"
+  theme_color: "#26A69A"
