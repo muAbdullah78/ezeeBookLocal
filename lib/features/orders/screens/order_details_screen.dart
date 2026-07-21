@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/snackbar_helper.dart';
@@ -147,6 +148,41 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final total = double.tryParse(_totalController.text) ?? 0;
     final advance = double.tryParse(_advanceController.text) ?? 0;
     return total - advance;
+  }
+
+  /// Any input the user would lose if they left this screen now. Used to
+  /// guard against an accidental back gesture discarding the order.
+  bool get _hasUnsavedInput =>
+      _totalController.text.trim().isNotEmpty ||
+      _deliveryDate != null ||
+      _specialInstructions.isNotEmpty ||
+      _quantity != 1 ||
+      _colorControllers.any((c) => c.text.trim().isNotEmpty);
+
+  Future<bool> _confirmDiscard() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('discard_changes_title'.tr()),
+        content: Text('discard_changes_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('keep_editing'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('discard'.tr()),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   String _formatDate(DateTime date) {
@@ -356,7 +392,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _isSaving = false);
-      _showError(e.toString());
+      _showError(friendlyError(e));
     }
   }
 
@@ -522,7 +558,14 @@ Thank you for choosing us!
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_hasUnsavedInput,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldDiscard = await _confirmDiscard();
+        if (shouldDiscard && mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text('order_details'.tr()),
@@ -558,6 +601,7 @@ Thank you for choosing us!
           ),
           _buildConfirmButton(),
         ],
+      ),
       ),
     );
   }
@@ -710,6 +754,7 @@ Thank you for choosing us!
           const SizedBox(height: 6),
           TextField(
             controller: _colorControllers[index],
+            onChanged: (_) => setState(() {}),
             decoration: InputDecoration(
               hintText: 'suit_color'.tr(),
               isDense: true,

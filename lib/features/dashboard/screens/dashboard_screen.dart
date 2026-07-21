@@ -156,7 +156,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       child: Row(
         children: [
-          const SizedBox(width: 42),
           Expanded(
             child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -195,20 +194,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ],
-            ),
-          ),
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(13),
-            ),
-            child: IconButton(
-              icon: const Icon(Icons.notifications_outlined,
-                  color: Colors.white, size: 21),
-              onPressed: () {},
-              padding: EdgeInsets.zero,
             ),
           ),
         ],

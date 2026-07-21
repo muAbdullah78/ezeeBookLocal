@@ -461,5 +461,14 @@
   "restore_offline_error": "No internet connection. Connect and try again.",
   "manage_subscription": "سبسکرپشن منظم کریں",
   "manage_subscription_subtitle": "گوگل پلے پر اپنا پلان منسوخ یا تبدیل کریں",
-  "manage_subscription_failed": "پلے اسٹور نہیں کھل سکا۔ براہ کرم اسے دستی طور پر کھولیں۔"
+  "manage_subscription_failed": "پلے اسٹور نہیں کھل سکا۔ براہ کرم اسے دستی طور پر کھولیں۔",
+  "err_duplicate_record": "یہ ریکارڈ پہلے سے موجود ہے۔",
+  "err_server": "سرور میں خرابی۔ براہ کرم دوبارہ کوشش کریں۔",
+  "err_no_internet": "انٹرنیٹ نہیں ہے۔ براہ کرم اپنا کنکشن چیک کریں۔",
+  "err_auth": "تصدیق میں خرابی۔ براہ کرم دوبارہ لاگ ان کریں۔",
+  "err_generic_friendly": "کچھ غلط ہو گیا۔ براہ کرم دوبارہ کوشش کریں۔",
+  "discard_changes_title": "تبدیلیاں ضائع کریں؟",
+  "discard_changes_message": "آپ کی غیر محفوظ شدہ تبدیلیاں ہیں۔ کیا آپ انہیں ضائع کرنا چاہتے ہیں؟",
+  "discard": "ضائع کریں",
+  "keep_editing": "ترمیم جاری رکھیں"
 }
