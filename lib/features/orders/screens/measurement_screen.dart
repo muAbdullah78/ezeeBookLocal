@@ -35,6 +35,10 @@ class _MeasurementScreenState extends State<MeasurementScreen>
     with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
 
+  /// True once the user edits any measurement field — guards against losing
+  /// the whole form to an accidental back gesture.
+  bool _isDirty = false;
+
   // ==================== GENDER HELPERS ====================
   bool get _isMale => widget.customerGender == 'male';
   bool get _isFemale => widget.customerGender == 'female';
@@ -624,7 +628,14 @@ class _MeasurementScreenState extends State<MeasurementScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: !_isDirty,
+      onPopInvokedWithResult: (didPop, result) async {
+        if (didPop) return;
+        final shouldDiscard = await _confirmDiscard();
+        if (shouldDiscard && mounted) Navigator.of(context).pop();
+      },
+      child: Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Column(
@@ -643,6 +654,9 @@ class _MeasurementScreenState extends State<MeasurementScreen>
       ),
       body: Form(
         key: _formKey,
+        onChanged: () {
+          if (!_isDirty) setState(() => _isDirty = true);
+        },
         child: Column(
           children: [
             Expanded(
@@ -683,7 +697,34 @@ class _MeasurementScreenState extends State<MeasurementScreen>
           ],
         ),
       ),
+      ),
     );
+  }
+
+  Future<bool> _confirmDiscard() async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('discard_changes_title'.tr()),
+        content: Text('discard_changes_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('keep_editing'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('discard'.tr()),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
   }
 
   // ==================== MEN'S SHIRT SECTION ====================

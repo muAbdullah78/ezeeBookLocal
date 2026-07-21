@@ -15,6 +15,12 @@ class SubscriptionService {
 
   String? get _userId => _client.auth.currentUser?.id;
 
+  /// Local preview period. No Play Console trial offer is configured — users
+  /// pay immediately on subscribe. This 72-hour window lets new signups
+  /// explore the app before subscribing. It is NOT a 14-day trial and NOT a
+  /// Play grace period; keep this number in sync with the store listing.
+  static const Duration kFreePreviewDuration = Duration(hours: 72);
+
   // Hardcoded plans — used when offline or Supabase fetch fails
   static const List<Map<String, dynamic>> defaultPlans = [
     {
@@ -334,7 +340,7 @@ class SubscriptionService {
     final now = await TimeService().trustedNow();
     if (now == null) return false;
 
-    final trialEnd = createdAt.add(const Duration(hours: 72));
+    final trialEnd = createdAt.add(kFreePreviewDuration);
     return now.isBefore(trialEnd);
   }
 
@@ -347,7 +353,7 @@ class SubscriptionService {
     if (createdAtStr.isEmpty) return null;
     final createdAt = DateTime.tryParse(createdAtStr)?.toUtc();
     if (createdAt == null) return null;
-    return createdAt.add(const Duration(hours: 72));
+    return createdAt.add(kFreePreviewDuration);
   }
 
   /// Get days remaining in current subscription

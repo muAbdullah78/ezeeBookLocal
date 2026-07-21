@@ -124,10 +124,12 @@ class _AccessGateState extends State<AccessGate>
     } catch (e, st) {
       AppLogger.error('AccessGate', 'evaluate failed',
           error: e, stackTrace: st);
-      // On error, fail OPEN (granted). Trade-off: brief access during
-      // error states is acceptable for v1. The next periodic check retries.
+      // Fail CLOSED: on unexpected errors, show the lock screen rather than
+      // granting access. The 60s periodic timer, app-resume, and auth-change
+      // listeners all re-run _evaluate(), and the lock screen's CTA lets the
+      // user retry manually — so a transient error self-heals within ~60s.
       if (mounted) {
-        setState(() => _state = AccessDecision.granted);
+        setState(() => _state = AccessDecision.timeUnverified);
       }
     }
   }

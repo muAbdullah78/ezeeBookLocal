@@ -2,7 +2,6 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/billing_service.dart';
-import '../../../core/services/subscription_service.dart';
 import '../../../core/utils/connectivity_helper.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
@@ -46,21 +45,14 @@ class _SubscriptionLockScreenState extends State<SubscriptionLockScreen> {
 
       switch (event) {
         case BillingEvent.success:
-          final ok = await SubscriptionService().createSubscription(
-            planId,
-            paymentMethod: 'play_billing',
+          // The subscription was already created with the server-verified
+          // expiry inside BillingService._handlePurchase. Do NOT create it
+          // again here — a second write would use a client-computed expiry.
+          SnackbarHelper.showSuccess(context, 'subscription_activated'.tr());
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const _GoToAccessGate()),
+            (route) => false,
           );
-          if (!mounted) return;
-          if (ok) {
-            SnackbarHelper.showSuccess(context, 'subscription_activated'.tr());
-            Navigator.of(context).pushAndRemoveUntil(
-              MaterialPageRoute(builder: (_) => const _GoToAccessGate()),
-              (route) => false,
-            );
-          } else {
-            SnackbarHelper.showError(
-                context, 'subscription_save_failed'.tr());
-          }
           break;
         case BillingEvent.pending:
           SnackbarHelper.showInfo(context, message);
