@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/snackbar_helper.dart';
 
 class ChangePasswordScreen extends StatefulWidget {
@@ -45,7 +46,7 @@ class _ChangePasswordScreenState extends State<ChangePasswordScreen> {
       }
     } catch (e) {
       if (mounted) {
-        SnackbarHelper.showError(context, '$e');
+        SnackbarHelper.showError(context, friendlyError(e));
       }
     } finally {
       if (mounted) setState(() => _isSaving = false);

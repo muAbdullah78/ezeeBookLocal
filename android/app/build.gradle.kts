@@ -14,6 +14,24 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+// Fail LOUDLY if a release AAB/APK is requested without a real release
+// signing config, instead of silently falling back to the debug key.
+// Scoped to release assembly so debug builds (which don't need the keystore)
+// keep working.
+gradle.taskGraph.whenReady {
+    val buildingRelease = allTasks.any { task ->
+        val n = task.name
+        n.contains("Release") &&
+            (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package"))
+    }
+    if (buildingRelease && !keystorePropertiesFile.exists()) {
+        throw GradleException(
+            "key.properties is missing. Cannot build a release AAB/APK without a " +
+                "release signing config. Copy your key.properties to the project root."
+        )
+    }
+}
+
 android {
     namespace = "com.usconnect.ezeebook"
     compileSdk = 36

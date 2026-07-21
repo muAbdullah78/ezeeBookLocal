@@ -19,10 +19,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Map<String, dynamic>? _currentSub;
   bool _loading = true;
   String? _selectedPlanId;
-  bool _promoExpanded = false;
-  final _promoController = TextEditingController();
-  String? _pendingPromoCode;
-  String? _promoFeedback;
   bool _subscribing = false;
   void Function(String, BillingEvent, String)? _previousBillingCallback;
 
@@ -35,7 +31,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   @override
   void dispose() {
-    _promoController.dispose();
     BillingService().onPurchaseComplete = _previousBillingCallback;
     super.dispose();
   }
@@ -47,18 +42,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
       switch (event) {
         case BillingEvent.success:
-          final ok = await SubscriptionService().createSubscription(
-            planId,
-            paymentMethod: 'play_billing',
-          );
-          if (!mounted) return;
-          if (ok) {
-            SnackbarHelper.showSuccess(context, 'subscription_activated'.tr());
-            Navigator.of(context).pop(true);
-          } else {
-            SnackbarHelper.showError(
-                context, 'subscription_save_failed'.tr());
-          }
+          // The subscription was already created with the server-verified
+          // expiry inside BillingService._handlePurchase. Do NOT create it
+          // again here — a second write would use a client-computed expiry.
+          SnackbarHelper.showSuccess(context, 'subscription_activated'.tr());
+          Navigator.of(context).pop(true);
           break;
         case BillingEvent.pending:
           SnackbarHelper.showInfo(context, message);
@@ -105,69 +93,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     return ((plan['price_pkr'] ?? 0) as num).toDouble();
   }
 
-  void _applyPromo() {
-    final code = _promoController.text.trim();
-    if (code.isEmpty) {
-      SnackbarHelper.showError(context, 'promo_enter_code'.tr());
-      return;
-    }
-    setState(() {
-      _pendingPromoCode = code;
-      _promoFeedback = 'promo_will_be_verified_at_checkout'.tr();
-    });
-  }
-
   Future<void> _subscribe() async {
     if (_selectedPlanId == null || _subscribing) return;
 
-    // Promo code path — atomically redeem then bypass billing
-    if (_pendingPromoCode != null && _pendingPromoCode!.isNotEmpty) {
-      setState(() => _subscribing = true);
-
-      final result =
-          await SubscriptionService().redeemPromoCode(_pendingPromoCode!);
-
-      if (!result.success) {
-        if (mounted) {
-          setState(() => _subscribing = false);
-          SnackbarHelper.showError(
-              context, _promoErrorMessageKey(result.reason).tr());
-        }
-        return;
-      }
-
-      // Compute final price from promoData discount
-      final plan = _plans.firstWhere((p) => p['id'] == _selectedPlanId!);
-      double finalPrice = ((plan['price_pkr'] ?? 0) as num).toDouble();
-      final promoData = result.promoData;
-      if (promoData != null) {
-        final discountPercent =
-            (promoData['discount_percent'] as num?)?.toInt() ?? 0;
-        final discountAmount =
-            (promoData['discount_amount'] as num?)?.toInt() ?? 0;
-        if (discountPercent > 0) {
-          finalPrice -= finalPrice * discountPercent / 100;
-        } else if (discountAmount > 0) {
-          finalPrice -= discountAmount.toDouble();
-        }
-        if (finalPrice < 0) finalPrice = 0;
-      }
-
-      final success = await _subscriptionService.createSubscription(
-        _selectedPlanId!,
-        promoCode: _pendingPromoCode,
-        finalPrice: finalPrice,
-      );
-      if (!mounted) return;
-      setState(() => _subscribing = false);
-      if (success) {
-        SnackbarHelper.showSuccess(context, 'subscription_activated'.tr());
-        Navigator.of(context).pop(true);
-      } else {
-        SnackbarHelper.showError(context, 'auth_something_wrong'.tr());
-      }
-      return;
-    }
+    // Promo redemption UI deferred to v1.1 — requires paired Edge Function.
 
     // Google Play billing path
     if (Platform.isAndroid && !BillingService().isAvailable) {
@@ -179,25 +108,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     setState(() => _subscribing = true);
     // Result arrives via onPurchaseComplete callback set in _setupBillingCallback
     await BillingService().purchaseSubscription(_selectedPlanId!);
-  }
-
-  String _promoErrorMessageKey(String? reason) {
-    switch (reason) {
-      case 'invalid_code':
-        return 'promo_invalid';
-      case 'not_yet_valid':
-        return 'promo_not_yet_valid';
-      case 'expired':
-        return 'promo_expired';
-      case 'already_used':
-        return 'promo_already_used';
-      case 'exhausted':
-        return 'promo_exhausted';
-      case 'network_error':
-        return 'promo_network_error';
-      default:
-        return 'promo_generic_error';
-    }
   }
 
   String _formatNumber(double n) {
@@ -286,8 +196,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
               _buildHeader(),
               const SizedBox(height: 16),
               ..._plans.map(_buildPlanCard),
-              const SizedBox(height: 16),
-              _buildPromoSection(),
               const SizedBox(height: 16),
               _buildAutoRenewalDisclosure(),
               const SizedBox(height: 80),
@@ -453,8 +361,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       onTap: () {
         setState(() {
           _selectedPlanId = planId;
-          _pendingPromoCode = null;
-          _promoFeedback = null;
         });
       },
       child: AnimatedContainer(
@@ -596,88 +502,6 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           letterSpacing: 0.3,
         ),
       ),
-    );
-  }
-
-  // ==================== PROMO CODE ====================
-
-  Widget _buildPromoSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        GestureDetector(
-          onTap: () => setState(() => _promoExpanded = !_promoExpanded),
-          child: Row(
-            children: [
-              Icon(
-                _promoExpanded ? Icons.expand_less : Icons.expand_more,
-                color: AppColors.primary,
-                size: 22,
-              ),
-              const SizedBox(width: 4),
-              Text(
-                'have_promo_code'.tr(),
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w500,
-                  color: AppColors.primary,
-                ),
-              ),
-            ],
-          ),
-        ),
-        if (_promoExpanded) ...[
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _promoController,
-                  textCapitalization: TextCapitalization.characters,
-                  textDirection: TextDirection.ltr,
-                  decoration: InputDecoration(
-                    hintText: 'promo_code_hint'.tr(),
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              SizedBox(
-                height: 44,
-                child: ElevatedButton(
-                  onPressed: _applyPromo,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text('apply'.tr()),
-                ),
-              ),
-            ],
-          ),
-          if (_promoFeedback != null) ...[
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                const Icon(Icons.info_outline, color: AppColors.primary, size: 18),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    _promoFeedback!,
-                    style: const TextStyle(
-                        fontSize: 13,
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.w500),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ],
-      ],
     );
   }
 

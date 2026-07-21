@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/customer.dart';
 
@@ -93,7 +94,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
     } catch (e) {
       setState(() => _isLoading = false);
       if (!mounted) return;
-      SnackbarHelper.showError(context, 'error_generic'.tr(namedArgs: {'error': '$e'}));
+      SnackbarHelper.showError(context, friendlyError(e));
     }
   }
 
@@ -173,6 +174,7 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
               const SizedBox(height: 6),
               TextFormField(
                 controller: _serialController,
+                readOnly: true,
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
