@@ -144,16 +144,12 @@ class _MainShellState extends State<MainShell> {
     ];
 
     return Scaffold(
-      body: SafeArea(
-        top: true,
-        bottom: false,
-        child: Column(
-          children: [
-            const OfflineBanner(),
-            if (_trialRemaining != null) _buildTrialBanner(_trialRemaining!),
-            Expanded(child: screens[_currentIndex]),
-          ],
-        ),
+      body: Column(
+        children: [
+          const OfflineBanner(),
+          if (_trialRemaining != null) _buildTrialBanner(_trialRemaining!),
+          Expanded(child: screens[_currentIndex]),
+        ],
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(

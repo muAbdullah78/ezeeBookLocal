@@ -25,7 +25,7 @@ Future<void> main() async {
       options.tracesSampleRate = 0.2; // 20% of transactions traced
       options.profilesSampleRate = 0.1; // 10% profiling
       options.environment = kReleaseMode ? 'production' : 'development';
-      options.release = 'ezeebook-flutter@1.0.0+5'; // Update on each release
+      options.release = 'ezeebook-flutter@1.0.0+4'; // Update on each release
       options.attachScreenshot = false; // Privacy: don't capture screenshots
       options.attachViewHierarchy = false; // Privacy: don't capture UI tree
       options.sendDefaultPii = false; // Privacy: don't auto-send PII
