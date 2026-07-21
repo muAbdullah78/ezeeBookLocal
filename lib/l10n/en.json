@@ -459,5 +459,6 @@
   "expired": "Expired",
   "restore_offline_error": "No internet connection. Connect and try again.",
   "manage_subscription": "Manage Subscription",
+  "manage_subscription_subtitle": "Cancel or change your plan on Google Play",
   "manage_subscription_failed": "Could not open Play Store. Please open Play Store manually."
 }

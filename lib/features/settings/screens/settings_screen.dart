@@ -32,8 +32,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _profileLoading = true;
   String _subscriptionStatus = '';
   bool _isSubscriptionExpired = false;
-  String? _subscriptionPaymentMethod;
-  bool _isFetchingPaymentMethod = false;
   final _subscriptionService = SubscriptionService();
 
   static const _manageSubscriptionUrl =
@@ -57,7 +55,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         _subscriptionStatus = 'days_remaining'.tr(namedArgs: {'days': days.toString()});
         _isSubscriptionExpired = false;
       });
-      _fetchSubscriptionPaymentMethod();
       return;
     }
 
@@ -146,38 +143,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
-  Future<void> _fetchSubscriptionPaymentMethod() async {
-    if (_isFetchingPaymentMethod) return;
-    _isFetchingPaymentMethod = true;
-    try {
-      final userId = _client.auth.currentUser?.id;
-      if (userId == null) return;
-      final response = await _client
-          .from('user_subscriptions')
-          .select('payment_method')
-          .eq('user_id', userId)
-          .eq('status', 'active')
-          .order('end_date', ascending: false)
-          .limit(1)
-          .maybeSingle()
-          .timeout(const Duration(seconds: 5));
-      if (mounted) {
-        setState(() {
-          _subscriptionPaymentMethod = response?['payment_method'] as String?;
-        });
-      }
-    } catch (e) {
-      AppLogger.info('Settings', 'Failed to fetch payment_method: $e');
-      // Leave _subscriptionPaymentMethod null — button stays hidden
-    } finally {
-      _isFetchingPaymentMethod = false;
-    }
-  }
-
-  bool _isPlayBillingActive() {
-    return !_isSubscriptionExpired && _subscriptionPaymentMethod == 'play_billing';
-  }
-
   Future<void> _openManageSubscription() async {
     final uri = Uri.parse(_manageSubscriptionUrl);
     try {
@@ -226,7 +191,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildProfileCard(),
           const SizedBox(height: 8),
 
-          // Subscription — individual card
+          // Subscription — status + manage plan
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Card(
@@ -236,37 +201,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(16),
               ),
-              child: _buildSettingsItem(
-                icon: Icons.card_membership,
-                title: 'subscription'.tr(),
-                subtitle: _subscriptionStatus,
-                isSubscription: true,
-                onTap: () async {
-                  await Navigator.of(context).push(
-                    SlidePageRoute(page: const SubscriptionScreen()),
-                  );
-                  _loadSubscriptionStatus();
-                },
+              child: Column(
+                children: [
+                  _buildSettingsItem(
+                    icon: Icons.card_membership,
+                    title: 'subscription'.tr(),
+                    subtitle: _subscriptionStatus,
+                    isSubscription: true,
+                    onTap: () async {
+                      await Navigator.of(context).push(
+                        SlidePageRoute(page: const SubscriptionScreen()),
+                      );
+                      _loadSubscriptionStatus();
+                    },
+                  ),
+                  const Divider(
+                    height: 1,
+                    color: Color(0xFFE5E7EB),
+                    indent: 72,
+                    endIndent: 16,
+                  ),
+                  // Always available (regardless of subscription state) so
+                  // users can cancel/change their plan on Google Play —
+                  // required by Google Play subscription policy.
+                  _buildSettingsItem(
+                    icon: Icons.credit_card_outlined,
+                    title: 'manage_subscription'.tr(),
+                    subtitle: 'manage_subscription_subtitle'.tr(),
+                    onTap: _openManageSubscription,
+                    trailing: const Icon(
+                      Icons.open_in_new,
+                      size: 20,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
-          if (_isPlayBillingActive())
-            Padding(
-              padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-              child: OutlinedButton.icon(
-                onPressed: _openManageSubscription,
-                icon: const Icon(Icons.settings_outlined, size: 18),
-                label: Text('manage_subscription'.tr()),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: const Color(0xFF26A69A),
-                  side: const BorderSide(color: Color(0xFF26A69A), width: 1.5),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  minimumSize: const Size(double.infinity, 44),
-                ),
-              ),
-            ),
           const SizedBox(height: 12),
 
           // Account section
@@ -539,6 +511,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     String? subtitle,
     bool isDestructive = false,
     bool isSubscription = false,
+    Widget? trailing,
   }) {
     final isExpired = isSubscription && _isSubscriptionExpired;
 
@@ -603,11 +576,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
               ),
             )
-          : const Icon(
-              Icons.chevron_right,
-              color: Color(0xFF6B7280),
-              size: 20,
-            ),
+          : (trailing ??
+              const Icon(
+                Icons.chevron_right,
+                color: Color(0xFF6B7280),
+                size: 20,
+              )),
     );
   }
 }
