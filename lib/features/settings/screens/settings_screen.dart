@@ -14,7 +14,6 @@ import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/widgets/root_gate.dart';
 import '../../../core/widgets/shimmer_loading.dart';
-import '../../dashboard/screens/main_shell.dart';
 import '../../security/screens/set_pin_screen.dart';
 import 'about_screen.dart';
 import 'edit_profile_screen.dart';
@@ -123,9 +122,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (result.success) {
       SnackbarHelper.showSuccess(context, 'restore_success'.tr());
-      // Rebuild the whole shell so every tab reloads the restored data.
+      // Rebuild through the gate so every tab reloads the restored data and
+      // the app-lock lifecycle observer stays active. startUnlocked avoids
+      // re-prompting for the PIN we already passed this session.
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainShell()),
+        MaterialPageRoute(builder: (_) => const RootGate(startUnlocked: true)),
         (route) => false,
       );
     } else {

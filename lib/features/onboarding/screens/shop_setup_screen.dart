@@ -3,7 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/page_transitions.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../security/screens/set_pin_screen.dart';
 
 /// First-run shop profile setup. Collects the shop details that appear on
@@ -39,24 +41,32 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
     if (!_formKey.currentState!.validate()) return;
     setState(() => _saving = true);
 
-    final now = DateTime.now().toIso8601String();
-    await SyncService().saveShopProfile({
-      'owner_name': _ownerNameController.text.trim(),
-      'phone': _phoneController.text.trim(),
-      'shop_name': _shopNameController.text.trim(),
-      'address': _addressController.text.trim(),
-      'email': '',
-      'created_at': now,
-      'updated_at': now,
-    });
+    try {
+      final now = DateTime.now().toIso8601String();
+      await SyncService().saveShopProfile({
+        'owner_name': _ownerNameController.text.trim(),
+        'phone': _phoneController.text.trim(),
+        'shop_name': _shopNameController.text.trim(),
+        'address': _addressController.text.trim(),
+        'email': '',
+        'created_at': now,
+        'updated_at': now,
+      });
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('shop_setup_done', true);
-    if (!mounted) return;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('shop_setup_done', true);
+      if (!mounted) return;
 
-    await _offerPin();
-    if (!mounted) return;
-    widget.onDone();
+      await _offerPin();
+      if (!mounted) return;
+      widget.onDone();
+    } catch (e, st) {
+      AppLogger.error('ShopSetupScreen', 'save failed', error: e, stackTrace: st);
+      if (mounted) {
+        setState(() => _saving = false);
+        SnackbarHelper.showError(context, 'auth_profile_save_failed'.tr());
+      }
+    }
   }
 
   Future<void> _offerPin() async {

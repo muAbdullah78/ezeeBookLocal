@@ -34,6 +34,7 @@ class _PinLockScreenState extends State<PinLockScreen> {
   final _controller = TextEditingController();
   String? _error;
   bool _busy = false;
+  int _attempts = 0;
 
   @override
   void dispose() {
@@ -52,13 +53,19 @@ class _PinLockScreenState extends State<PinLockScreen> {
     if (!mounted) return;
     if (ok) {
       widget.onUnlocked();
-    } else {
-      _controller.clear();
-      setState(() {
-        _busy = false;
-        _error = 'pin_wrong'.tr();
-      });
+      return;
     }
+    // Wrong PIN. Throttle repeated attempts with a growing delay to slow any
+    // manual brute-force (first two misses are free for honest typos).
+    _attempts++;
+    _controller.clear();
+    setState(() => _error = 'pin_wrong'.tr());
+    final int delaySecs = (_attempts - 2).clamp(0, 10).toInt();
+    if (delaySecs > 0) {
+      await Future.delayed(Duration(seconds: delaySecs));
+      if (!mounted) return;
+    }
+    setState(() => _busy = false);
   }
 
   Future<void> _forgotPin() async {
@@ -141,7 +148,9 @@ class _PinLockScreenState extends State<PinLockScreen> {
                 autofocus: true,
                 maxLength: 4,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                onSubmitted: (_) => _submit(),
+                onSubmitted: (_) {
+                  if (!_busy) _submit();
+                },
                 style: const TextStyle(fontSize: 24, letterSpacing: 10),
                 textAlign: TextAlign.center,
                 decoration: InputDecoration(

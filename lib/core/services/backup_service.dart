@@ -82,6 +82,14 @@ class BackupService {
             success: false, messageKey: 'restore_invalid_file');
       }
 
+      // If the file carries an app tag, it must be ours. (Bare table maps with
+      // no tag are still accepted for resilience.)
+      final appTag = decoded['app'];
+      if (appTag != null && appTag != _magic) {
+        return const BackupImportResult(
+            success: false, messageKey: 'restore_invalid_file');
+      }
+
       // Accept either the full envelope ({app, data:{...}}) or a bare table
       // map ({customers:[...], ...}) for resilience.
       final Map<String, dynamic> tables;
