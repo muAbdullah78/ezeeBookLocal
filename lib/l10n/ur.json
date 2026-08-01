@@ -4,7 +4,6 @@
   "english": "English",
   "urdu": "اردو",
   "continue_text": "جاری رکھیں",
-
   "login": "لاگ ان",
   "login_subtitle": "خوش آمدید! اپنے اکاؤنٹ میں لاگ ان کریں",
   "login_success": "لاگ ان کامیاب!",
@@ -37,7 +36,6 @@
   "already_have_account": "پہلے سے اکاؤنٹ ہے؟ لاگ ان کریں",
   "dont_have_account": "اکاؤنٹ نہیں ہے؟ سائن اپ کریں",
   "account_created": "اکاؤنٹ کامیابی سے بن گیا!",
-
   "reset_password_title": "Reset Password",
   "reset_password_otp_subtitle": "Enter the 6-digit code sent to {email} and choose a new password",
   "reset_password_otp_label": "6-digit code",
@@ -53,12 +51,10 @@
   "reset_otp_numeric_only": "Code must contain only digits",
   "reset_password_min_length": "Password must be at least 6 characters",
   "reset_password_mismatch": "Passwords do not match",
-
   "home": "ہوم",
   "customers": "گاہک",
   "orders": "آرڈرز",
   "settings": "ترتیبات",
-
   "total_customers": "کل گاہک",
   "active_orders": "فعال آرڈرز",
   "overdue_orders": "واجب الادا",
@@ -66,7 +62,6 @@
   "place_new_order": "نیا آرڈر دیں",
   "todays_deliveries": "آج کی ترسیلات",
   "no_deliveries_today": "آج کوئی ترسیل نہیں",
-
   "customer_name": "گاہک کا نام",
   "gender": "جنس",
   "male": "مرد",
@@ -78,7 +73,6 @@
   "cancel": "منسوخ",
   "delete": "حذف کریں",
   "edit": "ترمیم",
-
   "order_status_pending": "زیر التوا",
   "order_status_completed": "مکمل",
   "order_status_delivered": "ترسیل شدہ",
@@ -89,7 +83,6 @@
   "remaining_balance": "باقیہ",
   "search_orders": "آرڈر تلاش کریں...",
   "no_orders_yet": "ابھی کوئی آرڈر نہیں۔ اپنا پہلا آرڈر دیں!",
-
   "profile": "پروفائل",
   "language": "زبان",
   "subscription": "سبسکرپشن",
@@ -98,7 +91,6 @@
   "logout_confirm": "کیا آپ واقعی لاگ آؤٹ کرنا چاہتے ہیں؟",
   "yes": "ہاں",
   "no": "نہیں",
-
   "success_customer_added": "گاہک کامیابی سے شامل ہو گیا!",
   "customer_updated": "گاہک کامیابی سے اپ ڈیٹ ہو گیا!",
   "customer_deleted": "گاہک حذف ہو گیا",
@@ -113,7 +105,6 @@
   "language_selected": "زبان کامیابی سے منتخب ہو گئی",
   "customer_address": "پتہ",
   "customer_notes": "نوٹس",
-
   "select_customer": "گاہک منتخب کریں",
   "search_customer_placeholder": "نام، فون، یا #نمبر تلاش کریں...",
   "add_customer_first": "ابھی کوئی گاہک نہیں۔ پہلے گاہک شامل کریں!",
@@ -130,9 +121,7 @@
   "saved_measurements_found": "محفوظ شدہ ناپ ملے",
   "use_saved": "محفوظ ناپ استعمال کریں",
   "new_measurements": "نئے ناپ",
-
   "login_coming_next": "لاگ ان اسکرین جلد آ رہی ہے",
-
   "measurements": "ناپ",
   "shirt_kameez": "شرٹ / قمیض",
   "shalwar": "شلوار",
@@ -164,12 +153,10 @@
   "shalwar_ghair": "شلوار گھیر",
   "pocket": "جیب",
   "inches": "انچ",
-
   "kameez": "قمیض",
   "kurti": "کرتی",
   "short_shirt": "شارٹ شرٹ",
   "choli": "چولی",
-
   "w_shoulder": "تیرہ",
   "w_sleeve_label": "بازو",
   "w_chest_label": "chest",
@@ -182,7 +169,6 @@
   "w_kandhe_ki_chorai": "کندھے کی چوڑائی",
   "w_cuff_opening": "بازو موری",
   "w_cuff_ki_chorai": "کف کی چوڑائی",
-
   "choli_length": "چولی کی لمبائی",
   "w_choli_shoulder": "تیرا",
   "w_choli_chest": "چیسٹ",
@@ -194,7 +180,6 @@
   "half_sleeve": "آدھی",
   "full_sleeve": "پوری",
   "sleeveless": "بغیر بازو",
-
   "front_asan": "آسن",
   "back_asan": "پچھلا آسن",
   "ghera": "گھیرا",
@@ -205,7 +190,6 @@
   "sharara_length": "شرارہ لمبائی",
   "gharara": "غرارہ",
   "gharara_length": "غرارہ لمبائی",
-
   "waistband": "کمربند",
   "naara": "نارا",
   "elastic": "الاسٹک",
@@ -216,7 +200,6 @@
   "elastic_width_label": "الاسٹک چوڑائی",
   "belt_width_label": "بیلٹ چوڑائی",
   "custom": "حسب ضرورت",
-
   "dupatta": "دوپٹہ",
   "dupatta_included": "دوپٹہ شامل ہے؟",
   "finishing": "فنشنگ",
@@ -231,7 +214,6 @@
   "plain_pico": "سادہ پیکو",
   "japanese_pico": "جاپانی پیکو",
   "lace_provided_by_customer": "لیس گاہک کی طرف سے",
-
   "extra_instructions": "اضافی ہدایات",
   "press_hold_mic": "ہدایات ریکارڈ کرنے کے لیے مائک دبائیں",
   "recording": "ریکارڈنگ...",
@@ -243,7 +225,6 @@
   "delete_instruction": "یہ ہدایت حذف کریں؟",
   "voice_android_only": "آواز ان پٹ صرف اینڈرائیڈ پر دستیاب ہے",
   "instruction_added": "ہدایت شامل ہو گئی",
-
   "order_details": "آرڈر کی تفصیلات",
   "how_many_suits": "کتنے سوٹ؟",
   "suit_number": "سوٹ {number}",
@@ -267,10 +248,8 @@
   "error_select_delivery": "براہ کرم ترسیل کی تاریخ منتخب کریں",
   "error_enter_amount": "براہ کرم کل رقم درج کریں",
   "error_enter_colors": "براہ کرم تمام سوٹ کے رنگ درج کریں",
-
   "filter_all": "سب",
   "mark_completed": "مکمل کریں",
-
   "order_view_title": "آرڈر",
   "customer_info": "گاہک کی معلومات",
   "garment_info": "کپڑے کی تفصیل",
@@ -288,7 +267,6 @@
   "pdf_coming_soon": "PDF جلد آ رہا ہے!",
   "share_pdf": "PDF شیئر کریں",
   "generating_pdf": "PDF بنایا جا رہا ہے...",
-
   "edit_profile": "پروفائل میں ترمیم",
   "change_password": "پاس ورڈ تبدیل کریں",
   "new_password": "نیا پاس ورڈ",
@@ -299,7 +277,6 @@
   "app_version": "ورژن 1.0.0",
   "tailor_shop_management": "درزی کی دکان مینجمنٹ ایپ",
   "made_in_pakistan": "پاکستان میں محبت سے بنایا گیا",
-
   "auth_otp_sent": "OTP {email} پر بھیج دیا گیا",
   "auth_otp_resent": "New code sent. Check your email.",
   "auth_email_not_confirmed_guidance": "Your email is not yet verified. Please tap Sign Up again with the same email to receive a new verification code.",
@@ -316,13 +293,11 @@
   "error_sharing_pdf": "PDF شیئر کرنے میں خرابی",
   "error_generating_pdf": "PDF بنانے میں خرابی",
   "tailor_shop_tagline": "درزی کی دکان مینجمنٹ",
-
   "delete_account": "اکاؤنٹ حذف کریں",
   "delete_account_confirm": "اکاؤنٹ حذف کریں؟",
   "delete_account_warning": "یہ آپ کا اکاؤنٹ اور تمام ڈیٹا بشمول گاہک، آرڈرز اور ناپ مستقل حذف کر دے گا۔ یہ عمل واپس نہیں ہو سکتا۔",
   "type_delete_confirm": "تصدیق کے لیے حذف لکھیں",
   "delete_forever": "ہمیشہ کے لیے حذف کریں",
-
   "del_screen_title": "اکاؤنٹ حذف کریں",
   "del_warning_title": "اپنا اکاؤنٹ مستقل طور پر حذف کریں؟",
   "del_will_delete": "یہ مستقل طور پر حذف کر دے گا:",
@@ -353,15 +328,12 @@
   "del_err_failed": "حذف ناکام ہوا۔ براہ کرم دوبارہ کوشش کریں۔",
   "del_err_server": "سرور کی خرابی۔ براہ کرم دوبارہ کوشش کریں یا سپورٹ سے رابطہ کریں۔",
   "del_err_timeout": "درخواست کا وقت ختم ہو گیا۔ براہ کرم اپنا کنکشن چیک کریں۔",
-
   "privacy_policy": "رازداری کی پالیسی",
   "terms_of_service": "سروس کی شرائط",
-
   "publisher": "ناشر",
   "support_email": "سپورٹ ای میل",
   "support_phone": "سپورٹ فون",
   "version": "ورژن",
-
   "welcome_to_ezeebook": "ایزی بُک میں خوش آمدید",
   "consent_your_data": "آپ کا ڈیٹا اور رازداری",
   "consent_email_phone": "ہم اکاؤنٹ بنانے اور لاگ ان کے لیے آپ کا ای میل اور فون نمبر لیتے ہیں۔",
@@ -373,9 +345,7 @@
   "consent_get_started": "Get Started",
   "consent_already_account": "Already have an account?",
   "consent_login_link": "Login",
-
   "no_internet": "انٹرنیٹ کنکشن نہیں ہے",
-
   "mic_permission_title": "مائیکروفون کی اجازت",
   "mic_permission_body": "ایزی بُک کو آپ کی آواز کو ہدایات میں تبدیل کرنے کے لیے مائیکروفون تک رسائی درکار ہے۔ آپ کی آواز ریکارڈ یا محفوظ نہیں کی جاتی۔",
   "not_now": "ابھی نہیں",
@@ -385,7 +355,6 @@
   "voice_nothing_heard": "کچھ سنائی نہیں دیا۔ دوبارہ ریکارڈ کریں۔",
   "voice_could_not_start": "ریکارڈنگ شروع نہیں ہو سکی۔ دوبارہ کوشش کریں۔",
   "whatsapp_invalid_number": "گاہک کا فون نمبر درست نہیں ہے۔",
-
   "subscription_title": "سبسکرپشن",
   "choose_plan": "اپنا پلان منتخب کریں",
   "unlock_features": "ایزی بُک کی تمام خصوصیات کھولیں",
@@ -443,7 +412,6 @@
   "trial_banner_hours": "Free trial — {hours} hour(s) remaining",
   "trial_banner_minutes": "Free trial — {minutes} minute(s) remaining",
   "trial_banner_cta": "Subscribe",
-
   "advance_exceeds_total": "Advance payment cannot exceed the total amount",
   "orders_load_error": "Could not load orders. Please try again.",
   "retry": "Retry",
@@ -453,7 +421,6 @@
   "mark_done_confirm_title": "Mark order as completed?",
   "mark_done_confirm_body": "This cannot be undone. The order will be moved to completed status.",
   "mark_done_confirm_button": "Mark Done",
-
   "subscription_active": "Subscription active",
   "trial_active": "Free trial active",
   "active": "Active",
@@ -470,5 +437,63 @@
   "discard_changes_title": "تبدیلیاں ضائع کریں؟",
   "discard_changes_message": "آپ کی غیر محفوظ شدہ تبدیلیاں ہیں۔ کیا آپ انہیں ضائع کرنا چاہتے ہیں؟",
   "discard": "ضائع کریں",
-  "keep_editing": "ترمیم جاری رکھیں"
+  "keep_editing": "ترمیم جاری رکھیں",
+  "disclaimer_title": "شروع کرنے سے پہلے پڑھیں",
+  "disclaimer_intro": "ایزی بک ایک بار خریدنے والی ایپ ہے جس کے آپ مالک ہیں۔ یہ اس طرح کام کرتی ہے:",
+  "disclaimer_point_offline": "آپ کا تمام ڈیٹا صرف اسی فون میں محفوظ رہتا ہے۔ کچھ بھی کسی سرور یا کلاؤڈ پر نہیں بھیجا جاتا۔",
+  "disclaimer_point_backup": "اپنے ڈیٹا کا بیک اپ خود بنانا آپ کی ذمہ داری ہے۔ سیٹنگز ← بیک اپ باقاعدگی سے اور فون بدلنے سے پہلے استعمال کریں۔",
+  "disclaimer_point_asis": "ایپ ”جیسی ہے“ فراہم کی جاتی ہے، بغیر کسی قسم کی ضمانت کے۔",
+  "disclaimer_point_liability": "قانون کی اجازت کی حد تک، ڈویلپر اس ایپ کے استعمال سے ہونے والے کسی بھی ڈیٹا کے نقصان، کاروباری نقصان یا ہرجانے کا ذمہ دار نہیں ہے۔",
+  "disclaimer_agree_checkbox": "میں نے اوپر پڑھ لیا ہے اور قبول کرتا ہوں۔",
+  "disclaimer_accept_button": "میں متفق ہوں، آگے بڑھیں",
+  "shop_setup_title": "اپنی دکان ترتیب دیں",
+  "shop_setup_subtitle": "یہ آپ کی آرڈر رسید پر ظاہر ہوتا ہے۔ آپ اسے بعد میں سیٹنگز میں تبدیل کر سکتے ہیں۔ صرف دکان کا نام ضروری ہے۔",
+  "shop_setup_save": "محفوظ کریں اور آگے بڑھیں",
+  "pin_offer_title": "اپنا ڈیٹا محفوظ کریں؟",
+  "pin_offer_message": "4 ہندسوں کا پن لگائیں تاکہ صرف آپ ہی ایپ کھول سکیں۔ آپ اسے کسی بھی وقت سیٹنگز میں لگا یا ہٹا سکتے ہیں۔",
+  "pin_offer_set": "پن لگائیں",
+  "pin_offer_skip": "ابھی نہیں",
+  "set_pin_title": "ایپ پن",
+  "set_pin_subtitle": "ایپ کو لاک کرنے کے لیے 4 ہندسوں کا پن منتخب کریں۔ اسے یاد رکھیں — بھولا ہوا پن واپس حاصل نہیں کیا جا سکتا۔",
+  "pin_enter_label": "پن درج کریں",
+  "pin_confirm_label": "پن دوبارہ درج کریں",
+  "pin_error_length": "پن بالکل 4 ہندسوں کا ہونا چاہیے۔",
+  "pin_error_mismatch": "دونوں پن ایک جیسے نہیں ہیں۔",
+  "pin_saved": "ایپ لاک فعال ہو گیا۔",
+  "pin_lock_title": "پن درج کریں",
+  "pin_lock_subtitle": "ایزی بک کھولنے کے لیے اپنا 4 ہندسوں کا پن درج کریں۔",
+  "pin_unlock_button": "کھولیں",
+  "pin_wrong": "غلط پن۔ دوبارہ کوشش کریں۔",
+  "pin_forgot": "پن بھول گئے؟",
+  "pin_forgot_title": "پن بھول گئے؟",
+  "pin_forgot_warning": "بھولا ہوا پن واپس حاصل نہیں کیا جا سکتا۔ ایپ دوبارہ استعمال کرنے کے لیے آپ کو اس آلے کا تمام ڈیٹا مٹانا ہوگا۔ اگر آپ کے پاس بیک اپ فائل ہے تو آپ بعد میں اسے بحال کر سکتے ہیں۔",
+  "pin_forgot_erase": "مٹائیں اور نئے سرے سے شروع کریں",
+  "section_data": "ڈیٹا",
+  "backup_data": "ڈیٹا کا بیک اپ",
+  "backup_data_subtitle": "اپنا تمام ڈیٹا فائل میں محفوظ کریں",
+  "restore_data": "ڈیٹا بحال کریں",
+  "restore_data_subtitle": "بیک اپ فائل سے ڈیٹا لوڈ کریں",
+  "section_security": "حفاظت",
+  "app_lock": "ایپ لاک (پن)",
+  "set_pin": "ایپ پن لگائیں",
+  "change_pin": "پن تبدیل کریں",
+  "remove_pin": "ایپ لاک ہٹائیں",
+  "remove_pin_confirm_title": "ایپ لاک ہٹائیں؟",
+  "remove_pin_confirm_body": "پھر کوئی بھی بغیر پن کے ایپ کھول سکے گا۔",
+  "pin_removed": "ایپ لاک ہٹا دیا گیا۔",
+  "section_app": "ایپ",
+  "section_legal": "قانونی",
+  "danger_zone": "خطرے کا زون",
+  "erase_all_data": "تمام ڈیٹا مٹائیں",
+  "erase_all_data_subtitle": "اس آلے سے سب کچھ حذف کریں",
+  "erase_confirm_title": "تمام ڈیٹا مٹائیں؟",
+  "erase_confirm_body": "یہ اس آلے کے تمام گاہک، آرڈرز اور ناپ مستقل طور پر حذف کر دے گا۔ اسے واپس نہیں کیا جا سکتا۔ اگر آپ اپنا ڈیٹا رکھنا چاہتے ہیں تو پہلے بیک اپ بنائیں۔",
+  "erase_confirm_button": "سب کچھ مٹا دیں",
+  "backup_failed": "بیک اپ نہیں بن سکا۔",
+  "restore_confirm_title": "بیک اپ سے بحال کریں؟",
+  "restore_confirm_body": "یہ اس آلے کے موجودہ تمام ڈیٹا کو بیک اپ فائل کے ڈیٹا سے بدل دے گا۔ جاری رکھیں؟",
+  "restore_replace": "بدلیں",
+  "restore_success": "ڈیٹا کامیابی سے بحال ہو گیا۔",
+  "restore_failed": "بحال نہیں ہو سکا۔ فائل خراب ہو سکتی ہے۔",
+  "restore_invalid_file": "یہ درست ایزی بک بیک اپ فائل نہیں ہے۔"
 }

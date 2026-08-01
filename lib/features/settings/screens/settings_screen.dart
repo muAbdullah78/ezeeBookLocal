@@ -1,20 +1,23 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart' hide TextDirection;
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
-import '../../../core/services/subscription_service.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/database/database_helper.dart';
+import '../../../core/database/sync_service.dart';
+import '../../../core/services/backup_service.dart';
+import '../../../core/services/pin_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
+import '../../../core/widgets/root_gate.dart';
 import '../../../core/widgets/shimmer_loading.dart';
-import '../../account/screens/delete_account_screen.dart';
-import '../../auth/providers/auth_service.dart';
-import '../../auth/screens/login_screen.dart';
+import '../../dashboard/screens/main_shell.dart';
+import '../../security/screens/set_pin_screen.dart';
 import 'about_screen.dart';
 import 'edit_profile_screen.dart';
-import 'change_password_screen.dart';
-import 'subscription_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -24,140 +27,188 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final _client = Supabase.instance.client;
   String _shopName = '';
   String _ownerName = '';
-  String _email = '';
   String _phone = '';
   bool _profileLoading = true;
-  String _subscriptionStatus = '';
-  bool _isSubscriptionExpired = false;
-  final _subscriptionService = SubscriptionService();
-
-  static const _manageSubscriptionUrl =
-      'https://play.google.com/store/account/subscriptions'
-      '?package=com.usconnect.ezeebook';
+  bool _pinSet = false;
+  bool _busy = false;
 
   @override
   void initState() {
     super.initState();
     _loadProfile();
-    _loadSubscriptionStatus();
+    _loadPinState();
   }
 
-  Future<void> _loadSubscriptionStatus() async {
-    final sub = await _subscriptionService.getCurrentSubscription();
-    if (!mounted) return;
-
-    if (sub != null) {
-      final days = _subscriptionService.getDaysRemaining(sub['end_date']);
-      setState(() {
-        _subscriptionStatus = 'days_remaining'.tr(namedArgs: {'days': days.toString()});
-        _isSubscriptionExpired = false;
-      });
-      return;
-    }
-
-    // No active subscription — check if still in free trial
-    final inTrial = await _subscriptionService.isWithinFreeTrial();
-    if (!mounted) return;
-
-    if (inTrial) {
-      setState(() {
-        _subscriptionStatus = 'trial_active'.tr();
-        _isSubscriptionExpired = false;
-      });
-    } else {
-      setState(() {
-        _subscriptionStatus = 'subscription_expired'.tr();
-        _isSubscriptionExpired = true;
-      });
-    }
+  Future<void> _loadPinState() async {
+    final pinSet = await PinService().isPinSet();
+    if (mounted) setState(() => _pinSet = pinSet);
   }
 
   Future<void> _loadProfile() async {
     try {
-      final userId = _client.auth.currentUser?.id;
-      if (userId == null) return;
-      final data = await _client
-          .from('shop_profiles')
-          .select()
-          .eq('id', userId)
-          .maybeSingle();
+      final data = await SyncService().getShopProfile();
       if (data != null && mounted) {
         setState(() {
           _shopName = data['shop_name'] ?? '';
           _ownerName = data['owner_name'] ?? '';
-          _email = data['email'] ?? '';
           _phone = data['phone'] ?? '';
           _profileLoading = false;
         });
       } else if (mounted) {
-        setState(() {
-          _email = _client.auth.currentUser?.email ?? '';
-          _profileLoading = false;
-        });
+        setState(() => _profileLoading = false);
       }
-    } catch (_) {
+    } catch (e, st) {
+      AppLogger.error('Settings', 'profile load failed', error: e, stackTrace: st);
       if (mounted) setState(() => _profileLoading = false);
     }
   }
 
-  void _handleLogout(BuildContext context) {
-    showDialog(
+  // ==================== BACKUP / RESTORE ====================
+
+  Future<void> _backupData() async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    try {
+      await BackupService().exportAndShare();
+    } catch (e, st) {
+      AppLogger.error('Settings', 'backup failed', error: e, stackTrace: st);
+      if (mounted) SnackbarHelper.showError(context, 'backup_failed'.tr());
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _restoreData() async {
+    if (_busy) return;
+
+    FilePickerResult? picked;
+    try {
+      picked = await FilePicker.platform.pickFiles(type: FileType.any);
+    } catch (e, st) {
+      AppLogger.error('Settings', 'file pick failed', error: e, stackTrace: st);
+    }
+    final path = picked?.files.single.path;
+    if (path == null || !mounted) return;
+
+    final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('logout'.tr()),
-        content: Text('logout_confirm'.tr()),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('restore_confirm_title'.tr()),
+        content: Text('restore_confirm_body'.tr()),
         actions: [
           TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: Text('no'.tr()),
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('cancel'.tr()),
           ),
           ElevatedButton(
-            onPressed: () async {
-              Navigator.of(ctx).pop();
-              await AuthService().signOut();
-              if (context.mounted) {
-                Navigator.of(context).pushAndRemoveUntil(
-                  SlidePageRoute(page: const LoginScreen()),
-                  (route) => false,
-                );
-              }
-            },
+            onPressed: () => Navigator.of(ctx).pop(true),
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.error,
               foregroundColor: Colors.white,
             ),
-            child: Text('yes'.tr()),
+            child: Text('restore_replace'.tr()),
           ),
         ],
       ),
     );
-  }
+    if (confirmed != true) return;
 
-  void _handleDeleteAccount(BuildContext context) {
-    Navigator.of(context).push(
-      SlidePageRoute(page: const DeleteAccountScreen()),
-    );
-  }
+    setState(() => _busy = true);
+    final result = await BackupService().importFromFile(path);
+    if (!mounted) return;
+    setState(() => _busy = false);
 
-  Future<void> _openManageSubscription() async {
-    final uri = Uri.parse(_manageSubscriptionUrl);
-    try {
-      final canLaunch = await canLaunchUrl(uri);
-      if (canLaunch) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      } else if (mounted) {
-        SnackbarHelper.showError(context, 'manage_subscription_failed'.tr());
-      }
-    } catch (e) {
-      AppLogger.error('Settings', 'Failed to launch manage subscription URL: $e');
-      if (mounted) {
-        SnackbarHelper.showError(context, 'manage_subscription_failed'.tr());
-      }
+    if (result.success) {
+      SnackbarHelper.showSuccess(context, 'restore_success'.tr());
+      // Rebuild the whole shell so every tab reloads the restored data.
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const MainShell()),
+        (route) => false,
+      );
+    } else {
+      SnackbarHelper.showError(context, result.messageKey.tr());
     }
+  }
+
+  // ==================== APP LOCK (PIN) ====================
+
+  Future<void> _setOrChangePin() async {
+    await Navigator.of(context).push(
+      SlidePageRoute(page: const SetPinScreen()),
+    );
+    await _loadPinState();
+  }
+
+  Future<void> _removePin() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('remove_pin_confirm_title'.tr()),
+        content: Text('remove_pin_confirm_body'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('cancel'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('remove_pin'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await PinService().clearPin();
+    await _loadPinState();
+    if (mounted) SnackbarHelper.showSuccess(context, 'pin_removed'.tr());
+  }
+
+  // ==================== ERASE ALL DATA ====================
+
+  Future<void> _eraseAllData() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('erase_confirm_title'.tr()),
+        content: Text('erase_confirm_body'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('cancel'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('erase_confirm_button'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    await DatabaseHelper().clearAllData();
+    await PinService().clearPin();
+    // Reset first-run flags so the app returns to disclaimer + setup.
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('disclaimer_accepted');
+    await prefs.remove('shop_setup_done');
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const RootGate()),
+      (route) => false,
+    );
   }
 
   Future<void> _launchUrl(String url) async {
@@ -189,223 +240,116 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.only(bottom: 16),
         children: [
           _buildProfileCard(),
-          const SizedBox(height: 8),
-
-          // Subscription — status + manage plan
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              elevation: 2,
-              color: Colors.white,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildSettingsItem(
-                    icon: Icons.card_membership,
-                    title: 'subscription'.tr(),
-                    subtitle: _subscriptionStatus,
-                    isSubscription: true,
-                    onTap: () async {
-                      await Navigator.of(context).push(
-                        SlidePageRoute(page: const SubscriptionScreen()),
-                      );
-                      _loadSubscriptionStatus();
-                    },
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFE5E7EB),
-                    indent: 72,
-                    endIndent: 16,
-                  ),
-                  // Always available (regardless of subscription state) so
-                  // users can cancel/change their plan on Google Play —
-                  // required by Google Play subscription policy.
-                  _buildSettingsItem(
-                    icon: Icons.credit_card_outlined,
-                    title: 'manage_subscription'.tr(),
-                    subtitle: 'manage_subscription_subtitle'.tr(),
-                    onTap: _openManageSubscription,
-                    trailing: const Icon(
-                      Icons.open_in_new,
-                      size: 20,
-                      color: Color(0xFF6B7280),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
           const SizedBox(height: 12),
 
-          // Account section
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 20, 16, 8),
-            child: Text(
-              'Account',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
-              ),
+          // Data section — backup & restore
+          _sectionLabel('section_data'.tr()),
+          _card([
+            _buildSettingsItem(
+              icon: Icons.backup_outlined,
+              title: 'backup_data'.tr(),
+              subtitle: 'backup_data_subtitle'.tr(),
+              onTap: _backupData,
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              elevation: 2,
-              color: Colors.white,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildSettingsItem(
-                    icon: Icons.lock_outline,
-                    title: 'change_password'.tr(),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        SlidePageRoute(page: const ChangePasswordScreen()),
-                      );
-                    },
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFE5E7EB),
-                    indent: 72,
-                    endIndent: 16,
-                  ),
-                  _buildSettingsItem(
-                    icon: Icons.info_outline,
-                    title: 'about'.tr(),
-                    onTap: () {
-                      Navigator.of(context).push(
-                        SlidePageRoute(page: const AboutScreen()),
-                      );
-                    },
-                  ),
-                ],
-              ),
+            _divider(),
+            _buildSettingsItem(
+              icon: Icons.restore_outlined,
+              title: 'restore_data'.tr(),
+              subtitle: 'restore_data_subtitle'.tr(),
+              onTap: _restoreData,
             ),
-          ),
+          ]),
+          const SizedBox(height: 12),
+
+          // Security section — app lock
+          _sectionLabel('section_security'.tr()),
+          _card([
+            _buildSettingsItem(
+              icon: Icons.lock_outline,
+              title: _pinSet ? 'change_pin'.tr() : 'set_pin'.tr(),
+              subtitle: 'app_lock'.tr(),
+              onTap: _setOrChangePin,
+            ),
+            if (_pinSet) ...[
+              _divider(),
+              _buildSettingsItem(
+                icon: Icons.lock_open_outlined,
+                title: 'remove_pin'.tr(),
+                onTap: _removePin,
+              ),
+            ],
+          ]),
+          const SizedBox(height: 12),
+
+          // App section — about
+          _sectionLabel('section_app'.tr()),
+          _card([
+            _buildSettingsItem(
+              icon: Icons.info_outline,
+              title: 'about'.tr(),
+              onTap: () {
+                Navigator.of(context).push(
+                  SlidePageRoute(page: const AboutScreen()),
+                );
+              },
+            ),
+          ]),
           const SizedBox(height: 12),
 
           // Legal section
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 8, 16, 8),
-            child: Text(
-              'Legal',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF6B7280),
-              ),
+          _sectionLabel('section_legal'.tr()),
+          _card([
+            _buildSettingsItem(
+              icon: Icons.privacy_tip_outlined,
+              title: 'privacy_policy'.tr(),
+              onTap: () => _launchUrl(kPrivacyPolicyUrl),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              elevation: 2,
-              color: Colors.white,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildSettingsItem(
-                    icon: Icons.privacy_tip_outlined,
-                    title: 'privacy_policy'.tr(),
-                    onTap: () => _launchUrl('https://muabdullah78.github.io/ezeebook/privacy-policy.html'),
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFE5E7EB),
-                    indent: 72,
-                    endIndent: 16,
-                  ),
-                  _buildSettingsItem(
-                    icon: Icons.description_outlined,
-                    title: 'terms_of_service'.tr(),
-                    onTap: () => _launchUrl('https://muabdullah78.github.io/ezeebook/terms-of-service.html'),
-                  ),
-                ],
-              ),
+            _divider(),
+            _buildSettingsItem(
+              icon: Icons.description_outlined,
+              title: 'terms_of_service'.tr(),
+              onTap: () => _launchUrl(kTermsOfServiceUrl),
             ),
-          ),
+          ]),
           const SizedBox(height: 12),
 
-          // Danger Zone section
-          const Padding(
-            padding: EdgeInsets.fromLTRB(20, 8, 16, 8),
+          // Danger zone — erase all data
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
             child: Text(
-              'Danger Zone',
-              style: TextStyle(
+              'danger_zone'.tr(),
+              style: const TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
                 color: Color(0xFFE53935),
               ),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Card(
-              elevation: 2,
-              color: Colors.white,
-              margin: EdgeInsets.zero,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                children: [
-                  _buildSettingsItem(
-                    icon: Icons.logout,
-                    title: 'logout'.tr(),
-                    onTap: () => _handleLogout(context),
-                    isDestructive: true,
-                  ),
-                  const Divider(
-                    height: 1,
-                    color: Color(0xFFE5E7EB),
-                    indent: 72,
-                    endIndent: 16,
-                  ),
-                  _buildSettingsItem(
-                    icon: Icons.delete_forever,
-                    title: 'delete_account'.tr(),
-                    onTap: () => _handleDeleteAccount(context),
-                    isDestructive: true,
-                  ),
-                ],
-              ),
+          _card([
+            _buildSettingsItem(
+              icon: Icons.delete_forever,
+              title: 'erase_all_data'.tr(),
+              subtitle: 'erase_all_data_subtitle'.tr(),
+              onTap: _eraseAllData,
+              isDestructive: true,
             ),
-          ),
+          ]),
 
           // Version footer
-          const Padding(
-            padding: EdgeInsets.symmetric(vertical: 24),
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 24),
             child: Column(
               children: [
                 Text(
-                  'EzeeBook v1.0.0',
+                  'EzeeBook v$kAppVersion',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
-                  ),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
                 ),
-                SizedBox(height: 4),
-                Text(
+                const SizedBox(height: 4),
+                const Text(
                   'Made with ❤️ for tailors',
                   textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 11,
-                    color: Color(0xFFB0BEC5),
-                  ),
+                  style: TextStyle(fontSize: 11, color: Color(0xFFB0BEC5)),
                 ),
               ],
             ),
@@ -414,6 +358,36 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
     );
   }
+
+  Widget _sectionLabel(String text) => Padding(
+        padding: const EdgeInsets.fromLTRB(20, 8, 16, 8),
+        child: Text(
+          text,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Color(0xFF6B7280),
+          ),
+        ),
+      );
+
+  Widget _card(List<Widget> children) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Card(
+          elevation: 2,
+          color: Colors.white,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Column(children: children),
+        ),
+      );
+
+  Widget _divider() => const Divider(
+        height: 1,
+        color: Color(0xFFE5E7EB),
+        indent: 72,
+        endIndent: 16,
+      );
 
   Widget _buildProfileCard() {
     if (_profileLoading) return const ShimmerProfileCard();
@@ -435,9 +409,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       elevation: 2,
       color: Colors.white,
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
@@ -467,15 +439,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(height: 4),
-            Text(
-              _phone.isNotEmpty ? _phone : _email,
-              style: const TextStyle(
-                fontSize: 13,
-                color: Color(0xFF6B7280),
+            if (_phone.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                _phone,
+                style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+                textAlign: TextAlign.center,
               ),
-              textAlign: TextAlign.center,
-            ),
+            ],
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () async {
@@ -485,16 +456,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 _loadProfile();
               },
               icon: const Icon(Icons.edit_outlined, size: 16),
-              label: Text(
-                'edit_profile'.tr(),
-                style: const TextStyle(fontSize: 14),
-              ),
+              label: Text('edit_profile'.tr(), style: const TextStyle(fontSize: 14)),
               style: OutlinedButton.styleFrom(
                 foregroundColor: const Color(0xFF26A69A),
                 side: const BorderSide(color: Color(0xFF26A69A), width: 1.5),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(10),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
               ),
             ),
@@ -510,29 +476,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required VoidCallback onTap,
     String? subtitle,
     bool isDestructive = false,
-    bool isSubscription = false,
-    Widget? trailing,
   }) {
-    final isExpired = isSubscription && _isSubscriptionExpired;
-
     return ListTile(
-      onTap: onTap,
+      onTap: _busy ? null : onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       leading: Container(
         width: 40,
         height: 40,
         decoration: BoxDecoration(
-          color: isDestructive
-              ? const Color(0xFFFFEBEE)
-              : const Color(0xFFE0F2F1),
+          color: isDestructive ? const Color(0xFFFFEBEE) : const Color(0xFFE0F2F1),
           borderRadius: BorderRadius.circular(10),
         ),
         child: Icon(
           icon,
           size: 20,
-          color: isDestructive
-              ? const Color(0xFFE53935)
-              : const Color(0xFF26A69A),
+          color: isDestructive ? const Color(0xFFE53935) : const Color(0xFF26A69A),
         ),
       ),
       title: Text(
@@ -540,48 +498,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
         style: TextStyle(
           fontSize: 15,
           fontWeight: FontWeight.w600,
-          color: isDestructive
-              ? const Color(0xFFE53935)
-              : const Color(0xFF1A1A1A),
+          color: isDestructive ? const Color(0xFFE53935) : const Color(0xFF1A1A1A),
         ),
       ),
       subtitle: subtitle != null && subtitle.isNotEmpty
           ? Text(
               subtitle,
-              style: TextStyle(
-                fontSize: 12,
-                color: isExpired
-                    ? const Color(0xFFE53935)
-                    : const Color(0xFF6B7280),
-              ),
+              style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
             )
           : null,
-      trailing: isSubscription
-          ? Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: isExpired
-                    ? const Color(0xFFFFEBEE)
-                    : const Color(0xFFE0F2F1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                isExpired ? 'expired'.tr() : 'active'.tr(),
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isExpired
-                      ? const Color(0xFFE53935)
-                      : const Color(0xFF26A69A),
-                ),
-              ),
-            )
-          : (trailing ??
-              const Icon(
-                Icons.chevron_right,
-                color: Color(0xFF6B7280),
-                size: 20,
-              )),
+      trailing: const Icon(Icons.chevron_right, color: Color(0xFF6B7280), size: 20),
     );
   }
 }

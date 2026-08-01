@@ -1,5 +1,6 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
+import '../constants/app_constants.dart';
 
 class DatabaseHelper {
   static final DatabaseHelper _instance = DatabaseHelper._internal();
@@ -20,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 5,
+      version: 6,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -31,14 +32,12 @@ class DatabaseHelper {
     await _createOrdersTable(db);
     await _createMeasurementsTable(db);
     await _createDupattaDetailsTable(db);
-    await _createSubscriptionsTable(db);
     await _createShopProfilesTable(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       // Defensive: v1 customers schema might have lacked serial_number.
-      // Add it if missing; ignore the error if it already exists.
       try {
         await db.execute(
           'ALTER TABLE customers ADD COLUMN serial_number INTEGER NOT NULL DEFAULT 0',
@@ -56,17 +55,22 @@ class DatabaseHelper {
       await _createMeasurementsTable(db);
       await _createDupattaDetailsTable(db);
     }
-    if (oldVersion < 3) {
-      await _createSubscriptionsTable(db);
-    }
     if (oldVersion < 4) {
       await _createShopProfilesTable(db);
     }
-    if (oldVersion < 5) {
-      await db.execute('ALTER TABLE user_subscriptions '
-          'ADD COLUMN purchase_token TEXT');
-      await db.execute('ALTER TABLE user_subscriptions '
-          'ADD COLUMN auto_renewing INTEGER NOT NULL DEFAULT 0');
+    if (oldVersion < 6) {
+      // v6: the app dropped its subscription/cloud model and became fully
+      // offline. Remove the now-unused subscription table and re-key the
+      // single shop profile to the fixed local id (it used to be the cloud
+      // auth user id).
+      await db.execute('DROP TABLE IF EXISTS user_subscriptions');
+      try {
+        await db.execute(
+          "UPDATE shop_profiles SET id = '$kLocalShopId'",
+        );
+      } catch (_) {
+        // shop_profiles may not exist yet on very old installs — ignore.
+      }
     }
   }
 
@@ -145,23 +149,6 @@ class DatabaseHelper {
     ''');
   }
 
-  Future<void> _createSubscriptionsTable(Database db) async {
-    await db.execute('''
-      CREATE TABLE user_subscriptions (
-        id TEXT PRIMARY KEY,
-        plan_id TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'active',
-        start_date TEXT NOT NULL,
-        end_date TEXT NOT NULL,
-        promo_code_used TEXT,
-        purchase_token TEXT,
-        auto_renewing INTEGER NOT NULL DEFAULT 0,
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL
-      )
-    ''');
-  }
-
   Future<void> _createShopProfilesTable(Database db) async {
     await db.execute('''
       CREATE TABLE shop_profiles (
@@ -177,69 +164,27 @@ class DatabaseHelper {
     ''');
   }
 
-  // ==================== SUBSCRIPTION OPERATIONS ====================
-
-  Future<int> insertSubscription(Map<String, dynamic> subscription) async {
-    final db = await database;
-    return await db.insert('user_subscriptions', subscription);
-  }
-
-  Future<Map<String, dynamic>?> getActiveSubscription(
-      DateTime trustedNow) async {
-    final db = await database;
-    final nowIso = trustedNow.toUtc().toIso8601String();
-    final results = await db.query(
-      'user_subscriptions',
-      where: "status = 'active' AND end_date > ?",
-      whereArgs: [nowIso],
-      orderBy: 'end_date DESC',
-      limit: 1,
-    );
-    return results.isNotEmpty ? results.first : null;
-  }
-
-  Future<int> updateSubscription(String id, Map<String, dynamic> subscription) async {
-    final db = await database;
-    return await db.update('user_subscriptions', subscription, where: 'id = ?', whereArgs: [id]);
-  }
-
-  Future<bool> hasActiveSubscription(DateTime trustedNow) async {
-    final sub = await getActiveSubscription(trustedNow);
-    return sub != null;
-  }
-
-  /// Get the most recent subscription regardless of status (for grace period checks).
-  Future<Map<String, dynamic>?> getMostRecentSubscription() async {
-    final db = await database;
-    final results = await db.query(
-      'user_subscriptions',
-      orderBy: 'end_date DESC',
-      limit: 1,
-    );
-    return results.isNotEmpty ? results.first : null;
-  }
-
   // ==================== SHOP PROFILE OPERATIONS ====================
 
-  /// Insert or replace the shop profile row. id should be the user's
-  /// auth user id (matches cloud's shop_profiles.id pattern).
+  /// Insert or replace the shop profile row. Always keyed by [kLocalShopId].
   Future<int> upsertShopProfile(Map<String, dynamic> profile) async {
     final db = await database;
+    final row = Map<String, dynamic>.from(profile);
+    row['id'] = kLocalShopId; // single local shop — force the fixed key
     return await db.insert(
       'shop_profiles',
-      profile,
+      row,
       conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 
-  /// Read the current user's shop profile from local SQLite.
-  /// Returns null if no row exists.
-  Future<Map<String, dynamic>?> getShopProfile(String id) async {
+  /// Read the local shop profile. Returns null if it has not been set up yet.
+  Future<Map<String, dynamic>?> getShopProfile() async {
     final db = await database;
     final results = await db.query(
       'shop_profiles',
       where: 'id = ?',
-      whereArgs: [id],
+      whereArgs: [kLocalShopId],
       limit: 1,
     );
     return results.isNotEmpty ? results.first : null;
@@ -270,6 +215,16 @@ class DatabaseHelper {
 
   Future<int> deleteCustomer(String id) async {
     final db = await database;
+    // Manually clean up dependent rows — foreign-key cascade is not
+    // guaranteed to be enabled on the local SQLite connection.
+    final orders = await db.query('orders',
+        columns: ['id'], where: 'customer_id = ?', whereArgs: [id]);
+    for (final o in orders) {
+      final orderId = o['id'] as String;
+      await db.delete('dupatta_details', where: 'order_id = ?', whereArgs: [orderId]);
+    }
+    await db.delete('measurements', where: 'customer_id = ?', whereArgs: [id]);
+    await db.delete('orders', where: 'customer_id = ?', whereArgs: [id]);
     return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -367,10 +322,9 @@ class DatabaseHelper {
 
   Future<int> deleteOrder(String id) async {
     final db = await database;
-    // Manually clean up measurements referencing this order
-    // (the local schema lacks FK cascade for order_id; cloud has it)
+    // Manually clean up children — cascade is not guaranteed to be enabled.
+    await db.delete('dupatta_details', where: 'order_id = ?', whereArgs: [id]);
     await db.delete('measurements', where: 'order_id = ?', whereArgs: [id]);
-    // dupatta_details cascades automatically via SQLite FK
     return await db.delete('orders', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -493,11 +447,70 @@ class DatabaseHelper {
     return await db.update('dupatta_details', dupatta, where: 'id = ?', whereArgs: [id]);
   }
 
+  // ==================== BACKUP / RESTORE ====================
+
+  /// Read every row from every data table into a plain JSON-encodable map.
+  /// Used by the backup/export flow so a tailor can move their data to a new
+  /// device.
+  Future<Map<String, dynamic>> exportAllData() async {
+    final db = await database;
+    Future<List<Map<String, dynamic>>> rows(String t) async =>
+        (await db.query(t)).map((r) => Map<String, dynamic>.from(r)).toList();
+    return {
+      'customers': await rows('customers'),
+      'orders': await rows('orders'),
+      'measurements': await rows('measurements'),
+      'dupatta_details': await rows('dupatta_details'),
+      'shop_profiles': await rows('shop_profiles'),
+    };
+  }
+
+  /// Replace ALL local data with the contents of a backup map (produced by
+  /// [exportAllData]). Runs in a single transaction so a failure leaves the
+  /// existing data untouched.
+  Future<void> importAllData(Map<String, dynamic> data) async {
+    final db = await database;
+    List<Map<String, dynamic>> rows(dynamic v) => (v is List)
+        ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList()
+        : <Map<String, dynamic>>[];
+
+    await db.transaction((txn) async {
+      // Clear children first, then parents.
+      await txn.delete('dupatta_details');
+      await txn.delete('measurements');
+      await txn.delete('orders');
+      await txn.delete('customers');
+      await txn.delete('shop_profiles');
+
+      // Insert parents first, then children.
+      for (final r in rows(data['customers'])) {
+        await txn.insert('customers', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final r in rows(data['orders'])) {
+        await txn.insert('orders', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final r in rows(data['measurements'])) {
+        await txn.insert('measurements', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final r in rows(data['dupatta_details'])) {
+        await txn.insert('dupatta_details', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final r in rows(data['shop_profiles'])) {
+        r['id'] = kLocalShopId; // keep the single-shop invariant
+        await txn.insert('shop_profiles', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
   // ==================== DELETE ALL DATA ====================
 
   Future<void> deleteAllData() async {
     final db = await database;
-    await db.delete('user_subscriptions');
     await db.delete('shop_profiles');
     await db.delete('dupatta_details');
     await db.delete('measurements');
@@ -506,16 +519,11 @@ class DatabaseHelper {
   }
 
   /// Fully clear the local database by closing it and deleting the file.
-  ///
-  /// Used by account deletion: after the server has irrevocably removed all
-  /// cloud data, we wipe the local SQLite file entirely so that the next
-  /// login (any account) starts from a fresh, correctly-versioned schema.
-  /// The singleton handle is reset so [database] re-creates the file lazily.
+  /// Used by "Erase all data" so the app returns to a first-launch state.
   Future<void> clearAllData() async {
     final dbPath = await getDatabasesPath();
     final path = join(dbPath, 'ezeebook.db');
 
-    // Close the open handle first so the file is not locked on delete.
     if (_database != null) {
       await _database!.close();
       _database = null;

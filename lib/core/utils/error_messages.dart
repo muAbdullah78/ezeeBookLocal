@@ -1,20 +1,18 @@
-import 'dart:async';
-import 'dart:io';
-
 import 'package:easy_localization/easy_localization.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 /// Maps a caught exception to a short, localized, user-friendly message.
-/// Never surface raw exception strings (e.g. PostgrestException(...)) to
-/// end users — route everything through here.
+/// Never surface raw exception strings (e.g. sqflite DatabaseException(...))
+/// to end users — route everything through here.
+///
+/// The app is fully offline now, so the only errors we expect come from the
+/// local SQLite database. The most common recoverable one is a UNIQUE
+/// constraint violation (duplicate id / serial), which we surface distinctly.
 String friendlyError(Object? e) {
-  if (e is PostgrestException) {
-    if (e.code == '23505') return 'err_duplicate_record'.tr();
-    return 'err_server'.tr();
-  }
-  if (e is AuthException) return 'err_auth'.tr();
-  if (e is SocketException || e is TimeoutException) {
-    return 'err_no_internet'.tr();
+  final msg = e?.toString().toLowerCase() ?? '';
+  if (msg.contains('unique constraint') ||
+      msg.contains('code 2067') ||
+      msg.contains('code 1555')) {
+    return 'err_duplicate_record'.tr();
   }
   return 'err_generic_friendly'.tr();
 }
