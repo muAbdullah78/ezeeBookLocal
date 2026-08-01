@@ -14,7 +14,7 @@ import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/snackbar_helper.dart';
-import '../../../core/widgets/access_gate.dart';
+import '../../dashboard/screens/main_shell.dart';
 import '../widgets/extra_instructions_widget.dart';
 
 class OrderDetailsScreen extends StatefulWidget {
@@ -549,7 +549,7 @@ Thank you for choosing us!
 
   void _navigateToDashboard() {
     Navigator.of(context).pushAndRemoveUntil(
-      SlidePageRoute(page: const AccessGate()),
+      SlidePageRoute(page: const MainShell()),
       (route) => false,
     );
   }

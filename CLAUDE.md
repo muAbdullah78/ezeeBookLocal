@@ -1,7 +1,9 @@
 # EzeeBook - Tailor Shop Management App
 
 ## Project Overview
-EzeeBook is an Android app for Pakistani tailors (darzi) to manage their shops digitally. It replaces paper registers with digital customer tracking, order management, and measurement recording. The app is bilingual (English + Urdu) and works offline-first with cloud backup.
+EzeeBook is an Android app for Pakistani tailors (darzi) to manage their shops digitally. It replaces paper registers with digital customer tracking, order management, and measurement recording. The app is bilingual (English + Urdu) and works **fully offline** — all data lives only on the device.
+
+> **v2.0.0 (offline pivot):** The app is now a **one-time-purchase, fully offline** product installed directly on each tailor's phone. There is **no cloud, no Supabase, no accounts/login, and no subscription**. Data is stored only in local SQLite; users move data between phones with the built-in **Backup / Restore** file. See the "v2.0.0 — Offline one-time-purchase pivot" session log entry at the bottom for details.
 
 ## Target User
 - Pakistani tailors who run small shops
@@ -13,10 +15,11 @@ EzeeBook is an Android app for Pakistani tailors (darzi) to manage their shops d
 ## Tech Stack
 - **Framework:** Flutter (Android only, ignore iOS)
 - **Language:** Dart
-- **Local Database:** sqflite (SQLite) - for offline-first data
-- **Cloud Backend:** Supabase (PostgreSQL) - for cloud backup & auth
+- **Local Database:** sqflite (SQLite) - the single source of truth (fully offline)
+- **Cloud Backend:** NONE (removed in v2.0.0). No Supabase, no network calls.
 - **State Management:** Riverpod (not yet implemented, using StatefulWidget for now)
-- **Authentication:** Supabase Auth (email + password signup with OTP confirmation, email + password login)
+- **Authentication:** NONE. No accounts/login. Optional local 4-digit PIN app-lock only.
+- **Data migration:** Manual Backup/Restore to a JSON file (Settings) for moving devices.
 - **Localization:** easy_localization with JSON files (lib/l10n/en.json, lib/l10n/ur.json)
 - **Navigation:** Manual Navigator.push (go_router added but not used yet)
 - **Fonts:** Noto Nastaliq Urdu for Urdu text
@@ -220,6 +223,44 @@ Same structure as Supabase but without `user_id` column (only one user per devic
 - billing_service routes Play purchases through server verification
 - createSubscription accepts verifiedExpiresAt for server-authoritative
   expiry (auto-renewing model)
+
+### 2026-08-01: v2.0.0 — Offline one-time-purchase pivot
+Business change: instead of a Play Store subscription, the app is now sold
+once and installed directly on each tailor's phone. Everything cloud- and
+subscription-related was removed and replaced with a self-contained offline app.
+
+Removed entirely:
+- Subscription/trial/lock: subscription_service, billing_service, time_service,
+  subscription_sql, access_gate, subscription_screen, subscription_lock_screen,
+  trial banner, in_app_purchase; all promo/grace-period/trusted-time logic.
+- Cloud + auth: Supabase (supabase_config, all cloud sync paths, edge functions
+  verify-receipt & handle-rtdn), login/signup/OTP/forgot/reset/change-password,
+  delete-account flow, auth_service.
+- Sentry crash reporting and the connectivity_plus / offline banner.
+- The separate super-admin dashboard is a different repo — simply retire it;
+  nothing for it lives here.
+
+Added / reworked:
+- Entry flow (RootGate): Disclaimer (liability waiver) → Shop setup → optional
+  PIN → Dashboard. First-run flags: SharedPreferences `disclaimer_accepted`,
+  `shop_setup_done`.
+- SyncService is now a thin local-only facade over DatabaseHelper.
+- DB schema **v6**: drops `user_subscriptions`; shop profile re-keyed to the
+  fixed id `kLocalShopId` ('local_shop') — one shop per device. Existing
+  customer/order data is preserved across the upgrade.
+- Backup / Restore (core/services/backup_service.dart): export all tables to a
+  JSON file (share via WhatsApp/Drive/etc.) and re-import on a new phone. Import
+  REPLACES all local data inside a transaction.
+- Optional app-lock PIN (core/services/pin_service.dart): salted SHA-256, set
+  during onboarding or in Settings; "forgot PIN → erase & start fresh" escape.
+- Settings redesigned: profile, Backup/Restore, App-lock PIN, About, Legal,
+  Erase-all-data. Removed subscription/logout/change-password/delete-account.
+- pubspec: removed supabase_flutter, sentry_flutter, in_app_purchase,
+  connectivity_plus, http; added file_picker + crypto; version → 2.0.0+7.
+
+NOTE: The **Infrastructure**, **Play Console**, and subscription-related
+**v1.1 Backlog** items below are now **obsolete** (kept only for history). The
+Supabase project and Google Cloud receipt-verifier are no longer used by the app.
 
 ## Infrastructure
 - Google Cloud project: ezeebook-receipts (number: 449543207259)

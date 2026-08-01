@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/utils/app_logger.dart';
@@ -14,13 +13,12 @@ class EditProfileScreen extends StatefulWidget {
 }
 
 class _EditProfileScreenState extends State<EditProfileScreen> {
-  final _client = Supabase.instance.client;
   final _formKey = GlobalKey<FormState>();
   final _ownerNameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _shopNameController = TextEditingController();
   final _addressController = TextEditingController();
-  String _email = '';
+  String _createdAt = '';
   bool _isLoading = true;
   bool _isSaving = false;
 
@@ -47,9 +45,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = profile['phone'] ?? '';
         _shopNameController.text = profile['shop_name'] ?? '';
         _addressController.text = profile['address'] ?? '';
-        _email = profile['email'] ?? '';
-      } else if (mounted) {
-        _email = _client.auth.currentUser?.email ?? '';
+        _createdAt = (profile['created_at'] ?? '').toString();
       }
     } catch (e, st) {
       AppLogger.error('EditProfileScreen', 'profile load failed',
@@ -63,17 +59,15 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
 
     setState(() => _isSaving = true);
     try {
-      final userId = _client.auth.currentUser?.id;
-      if (userId == null) return;
-
+      final now = DateTime.now().toIso8601String();
       final saved = await SyncService().saveShopProfile({
-        'id': userId,
         'owner_name': _ownerNameController.text.trim(),
         'phone': _phoneController.text.trim(),
         'shop_name': _shopNameController.text.trim(),
         'address': _addressController.text.trim(),
-        'email': _email,
-        'updated_at': DateTime.now().toIso8601String(),
+        'email': '',
+        'created_at': _createdAt.isEmpty ? now : _createdAt,
+        'updated_at': now,
       });
       if (!saved) {
         throw Exception('save failed');
@@ -108,9 +102,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                 child: Column(
                   children: [
                     _buildField(
+                      controller: _shopNameController,
+                      label: 'shop_name'.tr(),
+                      icon: Icons.store_outlined,
+                    ),
+                    const SizedBox(height: 14),
+                    _buildField(
                       controller: _ownerNameController,
                       label: 'owner_name'.tr(),
                       icon: Icons.person_outline,
+                      required: false,
                     ),
                     const SizedBox(height: 14),
                     _buildField(
@@ -118,12 +119,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       label: 'phone_number'.tr(),
                       icon: Icons.phone_outlined,
                       keyboardType: TextInputType.phone,
-                    ),
-                    const SizedBox(height: 14),
-                    _buildField(
-                      controller: _shopNameController,
-                      label: 'shop_name'.tr(),
-                      icon: Icons.store_outlined,
+                      required: false,
                     ),
                     const SizedBox(height: 14),
                     _buildField(
@@ -132,30 +128,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                       icon: Icons.location_on_outlined,
                       required: false,
                     ),
-                    const SizedBox(height: 14),
-                    // Email (read-only)
-                    TextFormField(
-                      initialValue: _email,
-                      readOnly: true,
-                      decoration: InputDecoration(
-                        labelText: 'email'.tr(),
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        helperText: 'email_cannot_change'.tr(),
-                        helperStyle: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textHint,
-                        ),
-                        filled: true,
-                        fillColor: AppColors.divider,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide.none,
-                        ),
-                      ),
-                      style: const TextStyle(color: AppColors.textSecondary),
-                    ),
                     const SizedBox(height: 28),
-                    // Save button
                     SizedBox(
                       width: double.infinity,
                       height: 48,

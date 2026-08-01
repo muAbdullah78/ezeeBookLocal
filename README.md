@@ -1,17 +1,36 @@
-# ezeebook
+# EzeeBook
 
-A new Flutter project.
+A **fully offline** shop-management app for Pakistani tailors (darzi), built with
+Flutter for Android. It replaces paper registers with digital customer tracking,
+order management, measurements, PDF receipts, and WhatsApp sharing.
 
-## Getting Started
+## Model (v2.0.0)
 
-This project is a starting point for a Flutter application.
+EzeeBook is a **one-time-purchase** app installed directly on a tailor's phone:
 
-A few resources to get you started if this is your first Flutter project:
+- **No accounts, no login, no internet required.** All data is stored locally in
+  SQLite. The app makes no network calls of its own.
+- **Optional PIN lock.** A 4-digit app-lock can be enabled to protect data on a
+  shared/lost phone (Settings → App lock). A forgotten PIN can only be cleared by
+  erasing all data.
+- **Backup & Restore.** Move to a new phone via Settings → Backup data (creates a
+  JSON file you can send to yourself) and Restore data on the new device.
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## First launch
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+Disclaimer (sold as-is) → Shop setup (appears on receipts) → optional PIN → Dashboard.
+
+## Build
+
+```bash
+flutter pub get
+flutter run                 # on a connected Android device/emulator
+flutter build apk --release # release APK for direct install
+```
+
+Desktop testing (Windows/Linux) uses `sqflite_common_ffi` automatically.
+
+## Tech
+
+Flutter · Dart · sqflite (local DB) · easy_localization (en/ur) · pdf/printing ·
+share_plus · file_picker · crypto (PIN hashing).

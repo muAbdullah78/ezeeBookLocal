@@ -4,7 +4,6 @@
   "english": "English",
   "urdu": "اردو",
   "continue_text": "Continue",
-
   "login": "Login",
   "login_subtitle": "Welcome back! Log in to your account",
   "login_success": "Login successful!",
@@ -37,7 +36,6 @@
   "already_have_account": "Already have an account? Login",
   "dont_have_account": "Don't have an account? Sign Up",
   "account_created": "Account created successfully!",
-
   "reset_password_title": "Reset Password",
   "reset_password_otp_subtitle": "Enter the 6-digit code sent to {email} and choose a new password",
   "reset_password_otp_label": "6-digit code",
@@ -53,12 +51,10 @@
   "reset_otp_numeric_only": "Code must contain only digits",
   "reset_password_min_length": "Password must be at least 6 characters",
   "reset_password_mismatch": "Passwords do not match",
-
   "home": "Home",
   "customers": "Customers",
   "orders": "Orders",
   "settings": "Settings",
-
   "total_customers": "Total Customers",
   "active_orders": "Active Orders",
   "overdue_orders": "Overdue",
@@ -66,7 +62,6 @@
   "place_new_order": "Place New Order",
   "todays_deliveries": "Today's Deliveries",
   "no_deliveries_today": "No deliveries due today",
-
   "customer_name": "Customer Name",
   "gender": "Gender",
   "male": "Male",
@@ -78,7 +73,6 @@
   "cancel": "Cancel",
   "delete": "Delete",
   "edit": "Edit",
-
   "order_status_pending": "Pending",
   "order_status_completed": "Completed",
   "order_status_delivered": "Delivered",
@@ -89,7 +83,6 @@
   "remaining_balance": "Remaining (Baqaya)",
   "search_orders": "Search orders...",
   "no_orders_yet": "No orders yet. Place your first order!",
-
   "profile": "Profile",
   "language": "Language",
   "subscription": "Subscription",
@@ -98,7 +91,6 @@
   "logout_confirm": "Are you sure you want to logout?",
   "yes": "Yes",
   "no": "No",
-
   "success_customer_added": "Customer added successfully!",
   "customer_updated": "Customer updated successfully!",
   "customer_deleted": "Customer deleted",
@@ -129,9 +121,7 @@
   "saved_measurements_found": "Saved Measurements Found",
   "use_saved": "Use Saved Measurements",
   "new_measurements": "New Measurements",
-
   "login_coming_next": "Login screen coming next!",
-
   "measurements": "Measurements",
   "shirt_kameez": "Shirt / Kameez",
   "shalwar": "Shalwar",
@@ -163,12 +153,10 @@
   "shalwar_ghair": "Shalwar Ghair",
   "pocket": "Pocket",
   "inches": "in",
-
   "kameez": "Kameez",
   "kurti": "Kurti",
   "short_shirt": "Short Shirt",
   "choli": "Choli",
-
   "w_shoulder": "Shoulder",
   "w_sleeve_label": "Sleeve",
   "w_chest_label": "Chest",
@@ -181,7 +169,6 @@
   "w_kandhe_ki_chorai": "Kandhe ki Chorai",
   "w_cuff_opening": "Cuff Opening",
   "w_cuff_ki_chorai": "Cuff ki Chorai",
-
   "choli_length": "Choli Length",
   "w_choli_shoulder": "Shoulder",
   "w_choli_chest": "Chest",
@@ -193,7 +180,6 @@
   "half_sleeve": "Half",
   "full_sleeve": "Full",
   "sleeveless": "Sleeveless",
-
   "front_asan": "Front Asan",
   "back_asan": "Back Asan",
   "ghera": "Ghera",
@@ -204,7 +190,6 @@
   "sharara_length": "Sharara Length",
   "gharara": "Gharara",
   "gharara_length": "Gharara Length",
-
   "waistband": "Waistband",
   "naara": "Naara",
   "elastic": "Elastic",
@@ -215,7 +200,6 @@
   "elastic_width_label": "Elastic Width",
   "belt_width_label": "Belt Width",
   "custom": "Custom",
-
   "dupatta": "Dupatta",
   "dupatta_included": "Dupatta included?",
   "finishing": "Finishing",
@@ -230,7 +214,6 @@
   "plain_pico": "Plain Pico",
   "japanese_pico": "Japanese Pico",
   "lace_provided_by_customer": "Lace provided by customer",
-
   "extra_instructions": "Extra Instructions",
   "press_hold_mic": "Press and hold mic to record instructions",
   "recording": "Recording...",
@@ -242,7 +225,6 @@
   "delete_instruction": "Delete this instruction?",
   "voice_android_only": "Voice input available on Android only",
   "instruction_added": "Instruction added",
-
   "order_details": "Order Details",
   "how_many_suits": "How many suits?",
   "suit_number": "Suit {number}",
@@ -266,10 +248,8 @@
   "error_select_delivery": "Please select a delivery date",
   "error_enter_amount": "Please enter the total amount",
   "error_enter_colors": "Please enter colors for all suits",
-
   "filter_all": "All",
   "mark_completed": "Mark Done",
-
   "order_view_title": "Order",
   "customer_info": "Customer Info",
   "garment_info": "Garment Info",
@@ -287,7 +267,6 @@
   "pdf_coming_soon": "PDF feature coming soon!",
   "share_pdf": "Share PDF",
   "generating_pdf": "Generating PDF...",
-
   "edit_profile": "Edit Profile",
   "change_password": "Change Password",
   "new_password": "New Password",
@@ -298,7 +277,6 @@
   "app_version": "Version 1.0.0",
   "tailor_shop_management": "Tailor Shop Management App",
   "made_in_pakistan": "Made with love in Pakistan",
-
   "auth_otp_sent": "OTP sent to {email}",
   "auth_otp_resent": "New code sent. Check your email.",
   "auth_email_not_confirmed_guidance": "Your email is not yet verified. Please tap Sign Up again with the same email to receive a new verification code.",
@@ -315,13 +293,11 @@
   "error_sharing_pdf": "Error sharing PDF",
   "error_generating_pdf": "Error generating PDF",
   "tailor_shop_tagline": "Tailor Shop Management",
-
   "delete_account": "Delete Account",
   "delete_account_confirm": "Delete Account?",
   "delete_account_warning": "This will permanently delete your account and ALL your data including customers, orders, and measurements. This action cannot be undone.",
   "type_delete_confirm": "Type DELETE to confirm",
   "delete_forever": "Delete Forever",
-
   "del_screen_title": "Delete Account",
   "del_warning_title": "Permanently delete your account?",
   "del_will_delete": "This will permanently delete:",
@@ -352,15 +328,12 @@
   "del_err_failed": "Deletion failed. Please try again.",
   "del_err_server": "Server error. Please try again or contact support.",
   "del_err_timeout": "Request timed out. Please check your connection.",
-
   "privacy_policy": "Privacy Policy",
   "terms_of_service": "Terms of Service",
-
   "publisher": "Publisher",
   "support_email": "Support Email",
   "support_phone": "Support Phone",
   "version": "Version",
-
   "welcome_to_ezeebook": "Welcome to EzeeBook",
   "consent_your_data": "Your Data & Privacy",
   "consent_email_phone": "We collect your email and phone number for account creation and login.",
@@ -372,9 +345,7 @@
   "consent_get_started": "Get Started",
   "consent_already_account": "Already have an account?",
   "consent_login_link": "Login",
-
   "no_internet": "No internet connection",
-
   "mic_permission_title": "Microphone Permission",
   "mic_permission_body": "EzeeBook needs microphone access to convert your voice instructions to text. Your voice is NOT recorded or stored.",
   "not_now": "Not Now",
@@ -384,7 +355,6 @@
   "voice_nothing_heard": "Nothing heard. Try recording again.",
   "voice_could_not_start": "Could not start voice recording. Please try again.",
   "whatsapp_invalid_number": "Customer phone number is invalid.",
-
   "subscription_title": "Subscription",
   "choose_plan": "Choose Your Plan",
   "unlock_features": "Unlock all features of EzeeBook",
@@ -442,7 +412,6 @@
   "trial_banner_hours": "Free trial — {hours} hour(s) remaining",
   "trial_banner_minutes": "Free trial — {minutes} minute(s) remaining",
   "trial_banner_cta": "Subscribe",
-
   "advance_exceeds_total": "Advance payment cannot exceed the total amount",
   "orders_load_error": "Could not load orders. Please try again.",
   "retry": "Retry",
@@ -452,7 +421,6 @@
   "mark_done_confirm_title": "Mark order as completed?",
   "mark_done_confirm_body": "This cannot be undone. The order will be moved to completed status.",
   "mark_done_confirm_button": "Mark Done",
-
   "subscription_active": "Subscription active",
   "trial_active": "Free trial active",
   "active": "Active",
@@ -469,5 +437,63 @@
   "discard_changes_title": "Discard changes?",
   "discard_changes_message": "You have unsaved changes. Do you want to discard them?",
   "discard": "Discard",
-  "keep_editing": "Keep editing"
+  "keep_editing": "Keep editing",
+  "disclaimer_title": "Please read before you start",
+  "disclaimer_intro": "EzeeBook is a one-time purchase that you own. Here is how it works:",
+  "disclaimer_point_offline": "All your data stays only on this phone. Nothing is sent to any server or cloud.",
+  "disclaimer_point_backup": "You are responsible for your own backups. Use Settings › Backup data regularly, and before changing phones.",
+  "disclaimer_point_asis": "The app is provided \"as is\", without any warranty of any kind.",
+  "disclaimer_point_liability": "To the maximum extent allowed by law, the developer is not responsible or liable for any data loss, business loss, or damages arising from use of this app.",
+  "disclaimer_agree_checkbox": "I have read and accept the above.",
+  "disclaimer_accept_button": "I Agree & Continue",
+  "shop_setup_title": "Set up your shop",
+  "shop_setup_subtitle": "This appears on your order receipts. You can change it later in Settings. Only the shop name is required.",
+  "shop_setup_save": "Save & Continue",
+  "pin_offer_title": "Protect your data?",
+  "pin_offer_message": "Add a 4-digit PIN so only you can open the app. You can set or remove it anytime in Settings.",
+  "pin_offer_set": "Set a PIN",
+  "pin_offer_skip": "Not now",
+  "set_pin_title": "App PIN",
+  "set_pin_subtitle": "Choose a 4-digit PIN to lock the app. Remember it — a forgotten PIN cannot be recovered.",
+  "pin_enter_label": "Enter PIN",
+  "pin_confirm_label": "Confirm PIN",
+  "pin_error_length": "PIN must be exactly 4 digits.",
+  "pin_error_mismatch": "The two PINs do not match.",
+  "pin_saved": "App lock enabled.",
+  "pin_lock_title": "Enter PIN",
+  "pin_lock_subtitle": "Enter your 4-digit PIN to unlock EzeeBook.",
+  "pin_unlock_button": "Unlock",
+  "pin_wrong": "Wrong PIN. Please try again.",
+  "pin_forgot": "Forgot PIN?",
+  "pin_forgot_title": "Forgot your PIN?",
+  "pin_forgot_warning": "A forgotten PIN cannot be recovered. To use the app again you must erase all data on this device. If you have a backup file, you can restore it afterwards.",
+  "pin_forgot_erase": "Erase & start fresh",
+  "section_data": "Data",
+  "backup_data": "Backup data",
+  "backup_data_subtitle": "Save all your data to a file",
+  "restore_data": "Restore data",
+  "restore_data_subtitle": "Load data from a backup file",
+  "section_security": "Security",
+  "app_lock": "App lock (PIN)",
+  "set_pin": "Set app PIN",
+  "change_pin": "Change PIN",
+  "remove_pin": "Remove app lock",
+  "remove_pin_confirm_title": "Remove app lock?",
+  "remove_pin_confirm_body": "Anyone will be able to open the app without a PIN.",
+  "pin_removed": "App lock removed.",
+  "section_app": "App",
+  "section_legal": "Legal",
+  "danger_zone": "Danger Zone",
+  "erase_all_data": "Erase all data",
+  "erase_all_data_subtitle": "Delete everything on this device",
+  "erase_confirm_title": "Erase all data?",
+  "erase_confirm_body": "This permanently deletes ALL customers, orders and measurements on this device. This cannot be undone. Make a backup first if you want to keep your data.",
+  "erase_confirm_button": "Erase everything",
+  "backup_failed": "Could not create the backup.",
+  "restore_confirm_title": "Restore from backup?",
+  "restore_confirm_body": "This will REPLACE all current data on this device with the data from the backup file. Continue?",
+  "restore_replace": "Replace",
+  "restore_success": "Data restored successfully.",
+  "restore_failed": "Could not restore. The file may be damaged.",
+  "restore_invalid_file": "This is not a valid EzeeBook backup file."
 }
