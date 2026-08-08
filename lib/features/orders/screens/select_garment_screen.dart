@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/utils/garment_labels.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../models/customer.dart';
 import '../../../models/measurement.dart';
@@ -106,7 +107,14 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
     for (final gt in garmentTypes) {
       final data = await _sync.getMeasurementsByGarmentType(
           widget.customer.id, gt);
-      savedMeasurements.addAll(data.map((m) => Measurement.fromMap(m)));
+      // Rows come back newest-first, and every order adds another row for the
+      // same garment. Taking only the newest matters: _prefillFromSaved
+      // overwrites the form for each record it is given, so passing the whole
+      // history let the OLDEST measurements win — a loyal customer with years
+      // of orders was measured from their very first visit.
+      if (data.isNotEmpty) {
+        savedMeasurements.add(Measurement.fromMap(data.first));
+      }
     }
 
     if (!mounted) return;
@@ -122,6 +130,9 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
       String stitchType, List<Measurement> measurements) {
     showModalBottomSheet(
       context: context,
+      // Without this the sheet is capped at 9/16 of the screen and its
+      // action buttons can be pushed out of reach.
+      isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -167,7 +178,11 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            '${m.garmentType.tr()} — ${_formatDate(m.updatedAt)}',
+                            // garment_type is stored as 'shirt' /
+                            // 'shalwar_trouser', which have no translation
+                            // entries — .tr() echoed the raw key at the user.
+                            '${GarmentLabels.titleCase(m.garmentType)}'
+                            ' — ${_formatDate(m.updatedAt)}',
                             style: const TextStyle(
                               fontSize: 14,
                               color: AppColors.textPrimary,

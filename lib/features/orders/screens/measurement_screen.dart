@@ -403,9 +403,14 @@ class _MeasurementScreenState extends State<MeasurementScreen>
       } else if (m.garmentType == 'shalwar_trouser') {
         final bottomType = options['bottom_type'] ?? 'trouser';
         if (_isMale) {
+          // Restore the tab in both directions — without the else a saved
+          // trouser record left the tab wherever it happened to be.
           if (bottomType == 'shalwar') {
             _menBottomTabController.index = 1;
             _menSelectedBottomType = 'shalwar';
+          } else {
+            _menBottomTabController.index = 0;
+            _menSelectedBottomType = 'trouser';
           }
           for (final entry in data.entries) {
             if (_menBottomControllers.containsKey(entry.key)) {

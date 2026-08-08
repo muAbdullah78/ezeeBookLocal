@@ -80,14 +80,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
       filtered = filtered.where((o) => o['status'] == _selectedFilter).toList();
     }
 
-    // Search filter
+    // Search filter — the card shows "Name (#serial)" and the serial is the
+    // tailor's primary way of identifying a customer, so both it and the
+    // phone must be searchable, not just the name.
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
+      final q = _searchQuery.toLowerCase().replaceFirst('#', '').trim();
       filtered = filtered.where((o) {
         final name = (o['customer_name'] ?? '').toString().toLowerCase();
-        return name.contains(q);
+        final serial = (o['customer_serial'] ?? '').toString();
+        final phone =
+            (o['customer_phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        return name.contains(q) ||
+            serial == q ||
+            (q.isNotEmpty && phone.contains(q));
       }).toList();
     }
+
+    // Newest first. The underlying query sorts by delivery_date ASC, which
+    // otherwise opens the list on last year's delivered orders and buries
+    // today's work at the bottom.
+    filtered.sort((a, b) => (b['created_at'] ?? '')
+        .toString()
+        .compareTo((a['created_at'] ?? '').toString()));
 
     setState(() => _filteredOrders = filtered);
   }
@@ -140,6 +154,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return 'order_status_delivered'.tr();
       case 'overdue':
         return 'order_overdue'.tr();
+      case 'cancelled':
+        // Without this the badge printed the raw English DB value, even in
+        // Urdu.
+        return 'order_cancelled'.tr();
       default:
         return status;
     }
@@ -357,6 +375,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildEmptyState() {
+    // Distinguish "this shop has no orders" from "your search/filter matched
+    // nothing" — telling a tailor with 200 orders that they have none reads
+    // as data loss.
+    final isNarrowed = _searchQuery.isNotEmpty || _selectedFilter != 'all';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -370,15 +392,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 color: AppColors.orderAccent,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
-                Icons.receipt_long_outlined,
+              child: Icon(
+                isNarrowed
+                    ? Icons.search_off_rounded
+                    : Icons.receipt_long_outlined,
                 size: 40,
                 color: AppColors.warning,
               ),
             ),
             const SizedBox(height: 20),
             Text(
-              'no_orders_yet'.tr(),
+              isNarrowed ? 'no_results_found'.tr() : 'no_orders_yet'.tr(),
               style: const TextStyle(
                 fontSize: 16,
                 color: AppColors.textSecondary,

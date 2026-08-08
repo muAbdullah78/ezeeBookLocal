@@ -217,15 +217,23 @@ class DatabaseHelper {
     final db = await database;
     // Manually clean up dependent rows — foreign-key cascade is not
     // guaranteed to be enabled on the local SQLite connection.
-    final orders = await db.query('orders',
-        columns: ['id'], where: 'customer_id = ?', whereArgs: [id]);
-    for (final o in orders) {
-      final orderId = o['id'] as String;
-      await db.delete('dupatta_details', where: 'order_id = ?', whereArgs: [orderId]);
-    }
-    await db.delete('measurements', where: 'customer_id = ?', whereArgs: [id]);
-    await db.delete('orders', where: 'customer_id = ?', whereArgs: [id]);
-    return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
+    //
+    // Runs in a transaction so the customer is removed either completely or
+    // not at all. Previously these were four independent statements: a crash
+    // or a process kill part-way through (routine on Android) left orphaned
+    // orders and measurements behind, permanently invisible in the UI but
+    // still counted on the dashboard.
+    return await db.transaction<int>((txn) async {
+      final orders = await txn.query('orders',
+          columns: ['id'], where: 'customer_id = ?', whereArgs: [id]);
+      for (final o in orders) {
+        await txn.delete('dupatta_details',
+            where: 'order_id = ?', whereArgs: [o['id'] as String]);
+      }
+      await txn.delete('measurements', where: 'customer_id = ?', whereArgs: [id]);
+      await txn.delete('orders', where: 'customer_id = ?', whereArgs: [id]);
+      return await txn.delete('customers', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<List<Map<String, dynamic>>> searchCustomers(String query) async {
@@ -323,9 +331,13 @@ class DatabaseHelper {
   Future<int> deleteOrder(String id) async {
     final db = await database;
     // Manually clean up children — cascade is not guaranteed to be enabled.
-    await db.delete('dupatta_details', where: 'order_id = ?', whereArgs: [id]);
-    await db.delete('measurements', where: 'order_id = ?', whereArgs: [id]);
-    return await db.delete('orders', where: 'id = ?', whereArgs: [id]);
+    // Transactional for the same reason as deleteCustomer: a partial delete
+    // would leave orphaned measurements and dupatta rows behind.
+    return await db.transaction<int>((txn) async {
+      await txn.delete('dupatta_details', where: 'order_id = ?', whereArgs: [id]);
+      await txn.delete('measurements', where: 'order_id = ?', whereArgs: [id]);
+      return await txn.delete('orders', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<int> getActiveOrderCount() async {

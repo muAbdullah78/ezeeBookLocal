@@ -506,5 +506,6 @@
   "no_orders_for_customer": "No orders yet for this customer.",
   "total_orders": "orders",
   "last_updated": "Updated",
-  "continue_to_order": "Continue to Order"
+  "continue_to_order": "Continue to Order",
+  "order_status_cancelled": "Cancelled"
 }
