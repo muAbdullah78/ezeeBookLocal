@@ -74,6 +74,49 @@ class GarmentLabels {
     return label;
   }
 
+  /// Storage key → the label the tailor actually sees on the measurement
+  /// form. Measurements are saved under internal keys (`w_kandhe_ki_chorai`),
+  /// and printing those raw produced receipts full of "W Kandhe Ki Chorai".
+  static const Map<String, String> _measurementLabels = {
+    // Men — shirt
+    'length': 'Length', 'shoulder': 'Shoulder', 'chest': 'Chest',
+    'collar': 'Collar', 'sleeve_width': 'Sleeve Width', 'waist': 'Waist',
+    'hip': 'Hip', 'sleeve': 'Sleeve', 'cuff_width': 'Cuff Width',
+    'cuff_length': 'Cuff Length',
+    // Men — trouser / shalwar
+    'trouser_length': 'Trouser Length', 'paincha': 'Paincha',
+    'trouser_width': 'Trouser Width (Ghaira)', 'thigh': 'Thigh',
+    'patti_width': 'Patti Width', 'shalwar_length': 'Shalwar Length',
+    'paincha_shalwar': 'Paincha', 'shalwar_ghair': 'Shalwar Ghair',
+    'patti_width_shalwar': 'Patti Width',
+    // Women — shirt / kameez / kurti
+    'w_length': 'Length', 'w_shoulder': 'Shoulder (Tera)', 'w_sleeve': 'Sleeve',
+    'w_chest': 'Chest', 'w_hip': 'Hip', 'w_daman': 'Daman', 'w_chak': 'Chak',
+    'w_front_neck': 'Front Neck', 'w_back_neck': 'Back Neck',
+    'w_neck_width': 'Neck Width', 'w_kandhe_ki_chorai': 'Shoulder Width',
+    'w_cuff_opening': 'Cuff Opening', 'w_cuff_ki_chorai': 'Cuff Width',
+    // Women — choli
+    'w_choli_length': 'Choli Length', 'w_choli_shoulder': 'Shoulder (Tera)',
+    'w_choli_chest': 'Chest', 'w_under_bust': 'Under Bust',
+    'w_choli_front_neck': 'Front Neck', 'w_choli_back_neck': 'Back Neck',
+    'w_choli_neck_width': 'Neck Width',
+    'w_choli_kandhe_ki_chaurai': 'Shoulder Width',
+    'w_sleeve_opening': 'Sleeve Opening',
+    'w_sleeve_opening_width': 'Sleeve Opening Width',
+    'w_waist_band': 'Waist Band', 'w_choli_sleeve_length': 'Sleeve Length',
+    // Women — bottoms
+    'w_shalwar_length': 'Shalwar Length', 'w_trouser_length': 'Trouser Length',
+    'w_pajama_length': 'Pajama Length', 'w_sharara_length': 'Sharara Length',
+    'w_gharara_length': 'Gharara Length', 'w_front_asan': 'Front Asan',
+    'w_back_asan': 'Back Asan', 'w_thigh': 'Thigh', 'w_paincha': 'Paincha',
+    'w_ghera': 'Ghera', 'w_ghutna': 'Ghutna',
+  };
+
+  /// Readable name for a stored measurement key. Falls back to Title Case so
+  /// fields added by a custom category still print sensibly.
+  static String measurementLabel(String key) =>
+      _measurementLabels[key] ?? titleCase(key);
+
   /// Convert a snake_case key into readable Title Case ("cuff_width" →
   /// "Cuff Width"). Used for measurement/option keys and for custom
   /// categories that have no built-in translation.

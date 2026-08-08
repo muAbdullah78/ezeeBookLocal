@@ -507,5 +507,6 @@
   "total_orders": "آرڈرز",
   "last_updated": "اپ ڈیٹ",
   "continue_to_order": "آرڈر کی طرف بڑھیں",
-  "order_status_cancelled": "منسوخ شدہ"
+  "order_status_cancelled": "منسوخ شدہ",
+  "please_wait": "آرڈر کی تفصیلات لوڈ ہو رہی ہیں، انتظار کریں..."
 }

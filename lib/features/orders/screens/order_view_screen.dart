@@ -33,6 +33,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   List<Measurement> _measurements = [];
   Map<String, dynamic>? _shopProfile;
   bool _measurementsExpanded = false;
+  /// Guards PDF generation until the measurements have actually been read.
+  bool _detailsLoaded = false;
 
   @override
   void initState() {
@@ -42,13 +44,21 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   }
 
   Future<void> _loadDetails() async {
-    final measMaps = await _sync.getMeasurementsForOrder(_order['id']);
-    final profile = await _loadShopProfile();
-    if (mounted) {
+    try {
+      final measMaps = await _sync.getMeasurementsForOrder(_order['id']);
+      final profile = await _loadShopProfile();
+      if (!mounted) return;
       setState(() {
         _measurements = measMaps.map((m) => Measurement.fromMap(m)).toList();
         _shopProfile = profile;
+        _detailsLoaded = true;
       });
+    } catch (e, st) {
+      // Without this the failure escaped silently and a receipt could be
+      // generated with an empty Measurements section.
+      AppLogger.error('OrderViewScreen', 'load details failed',
+          error: e, stackTrace: st);
+      if (mounted) setState(() => _detailsLoaded = true);
     }
   }
 
@@ -307,7 +317,14 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     try {
       final dir = await getTemporaryDirectory();
       final serial = _order['customer_serial'] ?? '';
-      final file = File('${dir.path}/order_$serial.pdf');
+      // Include the delivery date and a slice of the order id: every order
+      // for the same customer previously wrote to order_<serial>.pdf, so a
+      // second receipt overwrote the first and could be re-shared by mistake.
+      final ref = (_order['id'] ?? '').toString().replaceAll('-', '');
+      final suffix = ref.length >= 6 ? ref.substring(0, 6) : ref;
+      final datePart =
+          (_order['delivery_date'] ?? '').toString().replaceAll('-', '');
+      final file = File('${dir.path}/order_${serial}_${datePart}_$suffix.pdf');
       await file.writeAsBytes(pdfBytes);
       await SharePlus.instance.share(
         ShareParams(
@@ -323,6 +340,12 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   }
 
   Future<List<int>?> _buildPdfBytes() async {
+    if (!_detailsLoaded) {
+      // Tapping the PDF button the instant the screen opens would otherwise
+      // produce a receipt with no measurements at all.
+      SnackbarHelper.showInfo(context, 'please_wait'.tr());
+      return null;
+    }
     // Show loading
     if (mounted) {
       SnackbarHelper.showInfo(context, 'generating_pdf'.tr());
