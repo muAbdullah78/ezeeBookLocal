@@ -372,9 +372,18 @@ class _MeasurementScreenState extends State<MeasurementScreen>
 
     for (final m in widget.savedMeasurements!) {
       final data = m.measurements;
-      final options = m.additionalOptions != null
-          ? json.decode(m.additionalOptions!) as Map<String, dynamic>
-          : <String, dynamic>{};
+      // Runs from initState — an unguarded decode (or a bad cast) here would
+      // take the whole measurement screen down instead of just skipping a
+      // damaged record.
+      Map<String, dynamic> options = <String, dynamic>{};
+      if (m.additionalOptions != null && m.additionalOptions!.isNotEmpty) {
+        try {
+          final decoded = json.decode(m.additionalOptions!);
+          if (decoded is Map) options = Map<String, dynamic>.from(decoded);
+        } catch (_) {
+          // Ignore an unreadable options blob and keep the measurements.
+        }
+      }
 
       if (m.garmentType == 'shirt') {
         if (_isMale) {

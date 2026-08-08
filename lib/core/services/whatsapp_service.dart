@@ -167,7 +167,7 @@ class WhatsAppService {
     final s = iso?.toString() ?? '';
     if (s.isEmpty) return '-';
     try {
-      final d = DateTime.parse(s);
+      final d = DateTime.parse(s).toLocal();
       return '${d.day.toString().padLeft(2, '0')}/'
           '${d.month.toString().padLeft(2, '0')}/${d.year}';
     } catch (_) {

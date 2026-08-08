@@ -11,6 +11,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/garment_labels.dart';
 import '../../../core/utils/pdf_generator.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/measurement.dart';
@@ -154,7 +155,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   String _formatDate(String? isoDate) {
     if (isoDate == null || isoDate.isEmpty) return '-';
     try {
-      final date = DateTime.parse(isoDate);
+      final date = DateTime.parse(isoDate).toLocal();
       return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     } catch (_) {
       return isoDate;
@@ -203,10 +204,23 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     }
   }
 
+  /// Render an option value the way the receipt does: booleans as Yes/No,
+  /// everything else title-cased. Previously these printed literal
+  /// "true"/"false" and raw snake_case values.
+  String _optionText(Object? v) {
+    if (v is bool) return v ? 'Yes' : 'No';
+    if (v is num && (v == 0 || v == 1)) return v == 1 ? 'Yes' : 'No';
+    return GarmentLabels.titleCase(v?.toString() ?? '');
+  }
+
   List<String> _colorsList() {
     try {
       final decoded = json.decode(_order['colors'] ?? '[]');
-      if (decoded is List) return decoded.cast<String>();
+      // cast<String>() is lazy and would throw later, during build, on any
+      // non-string entry — map eagerly instead.
+      if (decoded is List) {
+        return decoded.map((e) => e.toString()).toList();
+      }
     } catch (_) {}
     final c = _order['colors'] ?? '';
     return c.toString().isEmpty ? [] : [c.toString()];
@@ -964,7 +978,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                       const Divider(height: 1),
                       const SizedBox(height: 8),
                       Text(
-                        m.garmentType.tr(),
+                        GarmentLabels.measurementLabel(m.garmentType),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -988,7 +1002,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          e.key.tr(),
+                                          GarmentLabels.measurementLabel(e.key),
                                           style: const TextStyle(
                                             fontSize: 12,
                                             color: AppColors.textSecondary,
@@ -1021,7 +1035,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                   padding:
                                       const EdgeInsets.only(bottom: 2),
                                   child: Text(
-                                    '${e.key.tr()}: ${e.value.toString().tr()}',
+                                    '${GarmentLabels.measurementLabel(e.key)}: '
+                                    '${_optionText(e.value)}',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary,
