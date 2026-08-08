@@ -336,3 +336,42 @@ Notes:
 Still open (flagged, not changed): Urdu is unreachable at runtime
 (`supportedLocales` is pinned to `en` and `Directionality` to LTR in main.dart),
 and orders still cannot be edited or deleted after creation.
+
+### 2026-08-08: Ready-to-sell round
+
+Everything below was blocking a real sale rather than a feature request.
+
+- **Orders are editable and deletable.** `EditOrderScreen` corrects delivery
+  date, quantity, colours, total, advance and instructions; delete removes the
+  order with its measurements and dupatta row. Measurements are deliberately
+  not edited here — they belong to the measurement form, which knows the linked
+  options a flat edit screen would break.
+- **Payments can be recorded.** "Record Payment" adds to `advance_payment`
+  (clamped to the total), so the remaining balance actually clears instead of
+  telling a fully-paid customer they still owe money in the ready-message.
+- **Urdu works at runtime.** `supportedLocales` now lists `ur`, the forced LTR
+  wrapper is gone, `flutter_localizations` was added (without it a non-English
+  locale throws "No MaterialLocalizations found" on the first date picker), and
+  `AppTheme.forLocale` swaps in Noto Nastaliq with extra leading — the default
+  Android face has no Arabic glyphs, so Urdu would have rendered as boxes.
+  Settings → Language switches it and easy_localization persists the choice.
+  All 325 live keys are translated; English remains the default.
+- **Backup reminders.** `BackupService` records the last export; the dashboard
+  shows a one-tap reminder after 14 days (only once the shop has data), and
+  Settings shows the last backup date instead of a static subtitle.
+- **Launcher icon fixed.** Four of five densities were shipping the stock
+  Flutter logo while `mipmap-xxxhdpi` held a 2048×1849, 3.5 MB copy of the real
+  artwork. All five are regenerated from a new
+  `assets/images/app_icon.png` master (−3.5 MB), and
+  `flutter_launcher_icons.yaml` finally has an `image_path` plus an adaptive
+  foreground so `dart run flutter_launcher_icons` works.
+- **`assets/images/` now exists in the repo.** It was declared in pubspec but
+  git had never tracked it (empty directories are not committed), so a fresh
+  clone failed to build.
+- **`DISTRIBUTION.md`** documents keystore setup, the release build, the three
+  ways to install on a tailor's phone, and the questions shop owners ask.
+
+Signing note: `android/app/build.gradle.kts` already refuses to build a release
+without `key.properties`, so a copy can never ship debug-signed. The keystore
+must be preserved — a differently-signed update cannot install over an existing
+copy, and uninstalling wipes the tailor's data.

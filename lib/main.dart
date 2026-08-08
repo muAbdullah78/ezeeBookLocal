@@ -1,6 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart' hide TextDirection;
+import 'package:easy_localization/easy_localization.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/theme/app_theme.dart';
 import 'core/widgets/root_gate.dart';
@@ -18,10 +18,16 @@ Future<void> main() async {
 
   runApp(
     EasyLocalization(
-      supportedLocales: const [Locale('en')],
+      // Urdu used to be listed nowhere, so every translated string in ur.json
+      // was unreachable no matter what the tailor did. Both languages are now
+      // selectable from Settings.
+      supportedLocales: const [Locale('en'), Locale('ur')],
       path: 'lib/l10n',
       fallbackLocale: const Locale('en'),
+      // English on a fresh install; `saveLocale` means a tailor who switches to
+      // Urdu stays in Urdu on every later launch.
       startLocale: const Locale('en'),
+      saveLocale: true,
       child: const EzeeBookApp(),
     ),
   );
@@ -35,16 +41,13 @@ class EzeeBookApp extends StatelessWidget {
     return MaterialApp(
       title: 'EzeeBook',
       debugShowCheckedModeBanner: false,
-      theme: AppTheme.lightTheme,
+      // Urdu is right-to-left and needs its own font. Both follow from the
+      // locale now — the app used to force LTR for everything, which would
+      // have rendered Urdu backwards even if it had been reachable.
+      theme: AppTheme.forLocale(context.locale),
       localizationsDelegates: context.localizationDelegates,
       supportedLocales: context.supportedLocales,
       locale: context.locale,
-      builder: (context, child) {
-        return Directionality(
-          textDirection: TextDirection.ltr,
-          child: child!,
-        );
-      },
       home: const RootGate(),
     );
   }

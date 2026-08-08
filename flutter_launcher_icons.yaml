@@ -2,6 +2,19 @@ flutter_launcher_icons:
   android: true
   ios: false
   min_sdk_android: 26
+
+  # Source artwork. The generator had no image_path at all, so it could never
+  # run — which is why four of the five densities still shipped the stock
+  # Flutter logo. Regenerate any time with:
+  #   dart run flutter_launcher_icons
+  image_path: "assets/images/app_icon.png"
+
+  # Adaptive icon (Android 8+): the launcher masks the foreground to whatever
+  # shape the phone uses, so the mark is supplied on transparency over a flat
+  # brand-teal background rather than as a square tile.
+  adaptive_icon_background: "#26A69A"
+  adaptive_icon_foreground: "assets/images/app_icon_foreground.png"
+
   remove_alpha_ios: true
   background_color: "#26A69A"
   theme_color: "#26A69A"
