@@ -34,11 +34,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _pinSet = false;
   bool _busy = false;
 
+  /// When the tailor last exported a backup, so the row can say so instead of
+  /// leaving them to guess whether their data is safe anywhere but this phone.
+  DateTime? _lastBackupAt;
+
   @override
   void initState() {
     super.initState();
     _loadProfile();
     _loadPinState();
+    _loadLastBackup();
+  }
+
+  Future<void> _loadLastBackup() async {
+    final at = await BackupService().lastBackupAt();
+    if (mounted) setState(() => _lastBackupAt = at);
+  }
+
+  String get _lastBackupLabel {
+    final at = _lastBackupAt;
+    if (at == null) return 'backup_never'.tr();
+    final local = at.toLocal();
+    final date = '${local.day.toString().padLeft(2, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/${local.year}';
+    return 'backup_last'.tr(namedArgs: {'date': date});
   }
 
   Future<void> _loadPinState() async {
@@ -72,6 +91,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _busy = true);
     try {
       await BackupService().exportAndShare();
+      await _loadLastBackup();
     } catch (e, st) {
       AppLogger.error('Settings', 'backup failed', error: e, stackTrace: st);
       if (mounted) SnackbarHelper.showError(context, 'backup_failed'.tr());
@@ -213,6 +233,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
     );
   }
 
+  /// Switch the app between English and Urdu.
+  ///
+  /// easy_localization persists the choice, so the tailor picks once. The whole
+  /// UI rebuilds — including its text direction and font — because both are
+  /// derived from the locale in main.dart.
+  Future<void> _chooseLanguage() async {
+    final current = context.locale.languageCode;
+    final picked = await showDialog<String>(
+      context: context,
+      builder: (ctx) => SimpleDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('language'.tr()),
+        children: [
+          for (final option in const [('en', 'English'), ('ur', 'اردو')])
+            SimpleDialogOption(
+              onPressed: () => Navigator.of(ctx).pop(option.$1),
+              child: Row(
+                children: [
+                  Icon(
+                    current == option.$1
+                        ? Icons.radio_button_checked
+                        : Icons.radio_button_unchecked,
+                    size: 20,
+                    color: current == option.$1
+                        ? AppColors.primary
+                        : AppColors.textSecondary,
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    option.$2,
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textPrimary,
+                      fontFamily:
+                          option.$1 == 'ur' ? 'NotoNastaliqUrdu' : null,
+                      height: option.$1 == 'ur' ? 2.0 : null,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+
+    if (picked == null || !mounted || picked == current) return;
+    await context.setLocale(Locale(picked));
+  }
+
   Future<void> _launchUrl(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {
@@ -266,7 +335,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _buildSettingsItem(
               icon: Icons.backup_outlined,
               title: 'backup_data'.tr(),
-              subtitle: 'backup_data_subtitle'.tr(),
+              subtitle: _lastBackupLabel,
               onTap: _backupData,
             ),
             _divider(),
@@ -299,9 +368,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ]),
           const SizedBox(height: 12),
 
-          // App section — about
+          // App section — language & about
           _sectionLabel('section_app'.tr()),
           _card([
+            _buildSettingsItem(
+              icon: Icons.language,
+              title: 'language'.tr(),
+              subtitle: context.locale.languageCode == 'ur'
+                  ? 'language_urdu'.tr()
+                  : 'language_english'.tr(),
+              onTap: _chooseLanguage,
+            ),
+            _divider(),
             _buildSettingsItem(
               icon: Icons.info_outline,
               title: 'about'.tr(),

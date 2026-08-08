@@ -4,6 +4,45 @@ import '../constants/app_colors.dart';
 class AppTheme {
   AppTheme._();
 
+  /// Theme for the active [locale].
+  ///
+  /// Urdu needs its own font: the default Android face (Roboto) has no
+  /// Arabic-script glyphs, so switching the app to Urdu without this renders
+  /// every label as empty boxes. Noto Nastaliq is already bundled for the
+  /// Urdu hints and the PDF, so it is reused here for the whole UI.
+  static ThemeData forLocale(Locale locale) =>
+      locale.languageCode == 'ur' ? urduTheme : lightTheme;
+
+  /// Urdu variant of [lightTheme].
+  ///
+  /// Nastaliq is a tall, sloping script — at the same line height as Latin
+  /// text its descenders clip. The extra leading applied here is the same
+  /// allowance the hand-written Urdu labels elsewhere in the app already use.
+  static ThemeData get urduTheme {
+    final base = lightTheme;
+    return base.copyWith(
+      textTheme: base.textTheme.apply(
+        fontFamily: _urduFontFamily,
+        fontSizeFactor: 0.95,
+        heightDelta: 0.6,
+      ),
+      primaryTextTheme: base.primaryTextTheme.apply(
+        fontFamily: _urduFontFamily,
+        fontSizeFactor: 0.95,
+        heightDelta: 0.6,
+      ),
+      appBarTheme: base.appBarTheme.copyWith(
+        titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
+          fontFamily: _urduFontFamily,
+          fontSize: 18,
+          height: 1.9,
+        ),
+      ),
+    );
+  }
+
+  static const String _urduFontFamily = 'NotoNastaliqUrdu';
+
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,

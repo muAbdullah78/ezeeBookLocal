@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/backup_service.dart';
 import '../../../core/services/whatsapp_service.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/widgets/shimmer_loading.dart';
@@ -27,6 +29,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   List<Map<String, dynamic>> _todaysDeliveries = [];
   bool _statsLoading = true;
 
+  /// True when this shop has data and has not exported a backup recently.
+  bool _backupOverdue = false;
+  bool _backingUp = false;
+
   @override
   void initState() {
     super.initState();
@@ -38,14 +44,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final active = await _sync.getActiveOrderCount();
     final overdue = await _sync.getOverdueOrderCount();
     final deliveries = await _sync.getTodaysDeliveries();
+    final backupOverdue =
+        await BackupService().isBackupOverdue(hasData: customers > 0);
     if (mounted) {
       setState(() {
         _customerCount = customers;
         _activeOrderCount = active;
         _overdueOrderCount = overdue;
         _todaysDeliveries = deliveries;
+        _backupOverdue = backupOverdue;
         _statsLoading = false;
       });
+    }
+  }
+
+  /// Export a backup straight from the reminder, so acting on it is one tap
+  /// rather than a trip into Settings that the tailor will not make.
+  Future<void> _backupNow() async {
+    if (_backingUp) return;
+    setState(() => _backingUp = true);
+    try {
+      await BackupService().exportAndShare();
+      if (!mounted) return;
+      setState(() {
+        _backingUp = false;
+        _backupOverdue = false;
+      });
+    } catch (e, st) {
+      AppLogger.error('Dashboard', 'backup failed', error: e, stackTrace: st);
+      if (!mounted) return;
+      setState(() => _backingUp = false);
+      SnackbarHelper.showError(context, 'backup_failed'.tr());
     }
   }
 
@@ -176,6 +205,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    if (_backupOverdue) ...[
+                      _buildBackupReminder(),
+                      const SizedBox(height: 16),
+                    ],
                     _buildStatCards(),
                     const SizedBox(height: 24),
                     _buildQuickActions(context),
@@ -187,6 +220,82 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// Reminder to export a backup.
+  ///
+  /// The shop's whole register lives on this one phone — that is the price of
+  /// having no cloud and no account. If it is lost or broken and no file was
+  /// ever exported, everything is gone, so the app asks rather than waiting to
+  /// be asked.
+  Widget _buildBackupReminder() {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.warningLight,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Icon(Icons.backup_outlined,
+              size: 22, color: Color(0xFF8D6E00)),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'backup_reminder_title'.tr(),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: Color(0xFF6D5300),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'backup_reminder_body'.tr(),
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    color: Color(0xFF6D5300),
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                SizedBox(
+                  height: 34,
+                  child: ElevatedButton(
+                    onPressed: _backingUp ? null : _backupNow,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF8D6E00),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    child: _backingUp
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                                strokeWidth: 2, color: Colors.white),
+                          )
+                        : Text(
+                            'backup_now'.tr(),
+                            style: const TextStyle(
+                                fontSize: 13, fontWeight: FontWeight.bold),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

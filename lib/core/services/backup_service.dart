@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus, XFile;
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../constants/app_constants.dart';
 import '../database/database_helper.dart';
@@ -73,6 +74,54 @@ class BackupService {
         text: 'EzeeBook backup — keep this file safe to restore your data.',
       ),
     );
+    await _recordBackupTaken();
+  }
+
+  // ==================== backup reminders ====================
+  //
+  // The only copy of a shop's data is the phone in the tailor's pocket. That is
+  // the deliberate trade for having no cloud and no account, but it means a
+  // lost or broken phone is a total loss unless somebody actually exports a
+  // file. Nobody remembers to. So the app keeps track and asks.
+
+  static const String _kLastBackupKey = 'last_backup_at';
+
+  /// How long a shop can go without a backup before the dashboard says so.
+  static const Duration overdueAfter = Duration(days: 14);
+
+  Future<void> _recordBackupTaken() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          _kLastBackupKey, DateTime.now().toIso8601String());
+    } catch (e, st) {
+      // A reminder timestamp is never worth failing a completed backup over.
+      AppLogger.error('BackupService', 'could not record backup time',
+          error: e, stackTrace: st);
+    }
+  }
+
+  /// When the last backup was shared, or null if there has never been one.
+  Future<DateTime?> lastBackupAt() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final raw = prefs.getString(_kLastBackupKey);
+      if (raw == null || raw.isEmpty) return null;
+      return DateTime.tryParse(raw);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// True when the shop has data worth losing and no recent backup.
+  ///
+  /// [hasData] is passed in rather than queried here so a brand-new install
+  /// with an empty register is never nagged.
+  Future<bool> isBackupOverdue({required bool hasData}) async {
+    if (!hasData) return false;
+    final last = await lastBackupAt();
+    if (last == null) return true;
+    return DateTime.now().difference(last) >= overdueAfter;
   }
 
   /// Parse and validate a picked backup file, then REPLACE all local data

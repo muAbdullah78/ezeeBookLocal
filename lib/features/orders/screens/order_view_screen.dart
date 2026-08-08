@@ -11,11 +11,14 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/garment_labels.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/pdf_generator.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/measurement.dart';
 import '../../../services/error_reporter.dart';
+import 'edit_order_screen.dart';
 
 class OrderViewScreen extends StatefulWidget {
   final Map<String, dynamic> order;
@@ -241,6 +244,165 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     }
   }
 
+  // ==================== EDIT / PAYMENT / DELETE ====================
+
+  Future<void> _editOrder() async {
+    final updated = await Navigator.of(context).push<Map<String, dynamic>>(
+      SlidePageRoute(page: EditOrderScreen(order: _order)),
+    );
+    if (updated == null || !mounted) return;
+    setState(() => _order = Map<String, dynamic>.from(updated));
+    SnackbarHelper.showSuccess(context, 'order_updated'.tr());
+  }
+
+  /// Record money handed over after the order was placed.
+  ///
+  /// Without this the remaining balance shown on the order — and in the "your
+  /// order is ready" WhatsApp message — never cleared, so a fully paid order
+  /// kept telling the customer they still owed money.
+  Future<void> _recordPayment() async {
+    final total = _toDouble(_order['total_amount']);
+    final advance = _toDouble(_order['advance_payment']);
+    final remaining = total > advance ? total - advance : 0.0;
+
+    if (remaining <= 0) {
+      SnackbarHelper.showInfo(context, 'already_fully_paid'.tr());
+      return;
+    }
+
+    final controller =
+        TextEditingController(text: remaining.toStringAsFixed(0));
+    final entered = await showDialog<double>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('record_payment'.tr()),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'remaining_is'.tr(
+                  namedArgs: {'amount': remaining.toStringAsFixed(0)}),
+              style: const TextStyle(
+                  fontSize: 14, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: controller,
+              autofocus: true,
+              keyboardType:
+                  const TextInputType.numberWithOptions(decimal: true),
+              style: const TextStyle(
+                  fontSize: 16, color: AppColors.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'amount_received'.tr(),
+                prefixText: 'Rs. ',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('cancel'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final v = double.tryParse(controller.text.trim());
+              Navigator.of(ctx).pop(v);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('save'.tr()),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+
+    if (entered == null || !mounted) return;
+    if (entered <= 0) {
+      SnackbarHelper.showError(context, 'error_enter_amount'.tr());
+      return;
+    }
+
+    // Never let the advance exceed the total: the remaining balance is derived
+    // from the difference, and a negative one would render as a credit the
+    // shop does not owe.
+    final newAdvance = (advance + entered).clamp(0.0, total).toDouble();
+    final changes = {
+      'advance_payment': newAdvance,
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+    };
+
+    try {
+      await _sync.updateOrder(_order['id'].toString(), changes);
+      if (!mounted) return;
+      setState(() => _order.addAll(changes));
+      final left = total - newAdvance;
+      SnackbarHelper.showSuccess(
+        context,
+        left <= 0
+            ? 'payment_recorded_paid'.tr()
+            : 'payment_recorded_left'
+                .tr(namedArgs: {'amount': left.toStringAsFixed(0)}),
+      );
+    } catch (e, st) {
+      AppLogger.error('OrderViewScreen', 'record payment failed',
+          error: e, stackTrace: st);
+      if (mounted) SnackbarHelper.showError(context, friendlyError(e));
+    }
+  }
+
+  Future<void> _deleteOrder() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('delete_order_title'.tr()),
+        content: Text('delete_order_message'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('cancel'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('delete'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await _sync.deleteOrder(_order['id'].toString());
+      if (!mounted) return;
+      // Every caller reloads its list when this screen pops, so the deleted
+      // order disappears from wherever it was opened.
+      Navigator.of(context).pop();
+    } catch (e, st) {
+      AppLogger.error('OrderViewScreen', 'delete failed',
+          error: e, stackTrace: st);
+      if (mounted) SnackbarHelper.showError(context, friendlyError(e));
+    }
+  }
+
+  static double _toDouble(Object? v) {
+    if (v is num) return v.toDouble();
+    return double.tryParse(v?.toString() ?? '') ?? 0;
+  }
+
   /// Kept for the share/chat entry points. Routed through WhatsAppService so
   /// a failure to open WhatsApp reports itself — the old canLaunchUrl guard
   /// had no else branch, so the button silently did nothing.
@@ -464,6 +626,34 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                 SnackbarHelper.showInfo(context, 'no_phone_number'.tr());
               }
             },
+          ),
+          PopupMenuButton<String>(
+            icon: const Icon(Icons.more_vert),
+            onSelected: (value) {
+              switch (value) {
+                case 'edit':
+                  _editOrder();
+                  break;
+                case 'payment':
+                  _recordPayment();
+                  break;
+                case 'delete':
+                  _deleteOrder();
+                  break;
+              }
+            },
+            itemBuilder: (ctx) => [
+              PopupMenuItem(value: 'edit', child: Text('edit_order'.tr())),
+              PopupMenuItem(
+                  value: 'payment', child: Text('record_payment'.tr())),
+              PopupMenuItem(
+                value: 'delete',
+                child: Text(
+                  'delete_order'.tr(),
+                  style: const TextStyle(color: AppColors.error),
+                ),
+              ),
+            ],
           ),
         ],
       ),
