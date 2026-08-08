@@ -499,5 +499,12 @@
   "message_customer": "گاہک کو پیغام بھیجیں",
   "send_order_confirmation": "آرڈر کی تصدیق بھیجیں",
   "send_order_ready": "”آرڈر تیار ہے“ پیغام بھیجیں",
-  "whatsapp_open_failed": "واٹس ایپ نہیں کھل سکا۔ کیا یہ انسٹال ہے؟"
+  "whatsapp_open_failed": "واٹس ایپ نہیں کھل سکا۔ کیا یہ انسٹال ہے؟",
+  "saved_measurements": "محفوظ شدہ ناپ",
+  "no_saved_measurements": "اس گاہک کے لیے ابھی کوئی ناپ محفوظ نہیں ہے۔",
+  "order_history": "آرڈر کی تاریخ",
+  "no_orders_for_customer": "اس گاہک کا ابھی کوئی آرڈر نہیں ہے۔",
+  "total_orders": "آرڈرز",
+  "last_updated": "اپ ڈیٹ",
+  "continue_to_order": "آرڈر کی طرف بڑھیں"
 }

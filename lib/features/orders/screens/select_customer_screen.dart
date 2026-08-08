@@ -5,6 +5,7 @@ import '../../../core/database/sync_service.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../models/customer.dart';
 import '../../customers/screens/add_customer_screen.dart';
+import '../../customers/screens/customer_profile_screen.dart';
 import 'select_garment_screen.dart';
 
 class SelectCustomerScreen extends StatefulWidget {
@@ -77,9 +78,22 @@ class _SelectCustomerScreenState extends State<SelectCustomerScreen> {
     if (result == true) _loadCustomers();
   }
 
-  void _selectCustomer(Customer customer) {
+  /// Returning customers go via their profile, where the tailor can see the
+  /// measurements already on file and the previous orders before starting a
+  /// new one. A customer with no history has nothing to show, so they go
+  /// straight to picking a garment as before.
+  Future<void> _selectCustomer(Customer customer) async {
+    final orderCount = await _sync.getOrderCountForCustomer(customer.id);
+    final saved = await _sync.getMeasurementsForCustomer(customer.id);
+    if (!mounted) return;
+
+    final hasHistory = orderCount > 0 || saved.isNotEmpty;
     Navigator.of(context).push(
-      SlidePageRoute(page: SelectGarmentScreen(customer: customer)),
+      SlidePageRoute(
+        page: hasHistory
+            ? CustomerProfileScreen(customer: customer, orderFlow: true)
+            : SelectGarmentScreen(customer: customer),
+      ),
     );
   }
 

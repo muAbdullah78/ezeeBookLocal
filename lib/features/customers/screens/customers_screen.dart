@@ -6,6 +6,7 @@ import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/customer.dart';
 import 'add_customer_screen.dart';
+import 'customer_profile_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -64,6 +65,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
       SlidePageRoute(page: const AddCustomerScreen()),
     );
     if (result == true) _loadCustomers();
+  }
+
+  Future<void> _openProfile(Customer customer) async {
+    await Navigator.of(context).push(
+      SlidePageRoute(page: CustomerProfileScreen(customer: customer)),
+    );
+    if (mounted) _loadCustomers();
   }
 
   Future<void> _navigateToEdit(Customer customer) async {
@@ -296,7 +304,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 ),
               ],
             ),
-            onTap: () => _navigateToEdit(customer),
+            // Tapping a customer shows their profile (measurements + order
+            // history); editing stays available in the ⋮ menu.
+            onTap: () => _openProfile(customer),
           ),
         );
       },

@@ -499,5 +499,12 @@
   "message_customer": "Message Customer",
   "send_order_confirmation": "Send Order Confirmation",
   "send_order_ready": "Send \"Order Ready\" Message",
-  "whatsapp_open_failed": "Could not open WhatsApp. Is it installed?"
+  "whatsapp_open_failed": "Could not open WhatsApp. Is it installed?",
+  "saved_measurements": "Saved Measurements",
+  "no_saved_measurements": "No measurements saved yet for this customer.",
+  "order_history": "Order History",
+  "no_orders_for_customer": "No orders yet for this customer.",
+  "total_orders": "orders",
+  "last_updated": "Updated",
+  "continue_to_order": "Continue to Order"
 }
