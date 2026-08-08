@@ -43,6 +43,7 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
   bool _pinSet = false;
   bool _unlocked = false;
   DateTime? _backgroundedAt;
+  bool _lockRouteOpen = false;
 
   @override
   void initState() {
@@ -69,9 +70,38 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
           _unlocked &&
           since != null &&
           DateTime.now().difference(since) >= _relockAfter) {
-        setState(() => _unlocked = false);
+        _showLockOverlay();
       }
     }
+  }
+
+  /// Re-locking cannot simply flip a flag: RootGate sits at the bottom of the
+  /// navigator as `home:`, so rebuilding it while the tailor is deep in an
+  /// order (or has the PDF preview open) renders the lock screen *underneath*
+  /// those routes and leaves the data on screen. Pushing a route on the root
+  /// navigator covers the whole stack.
+  Future<void> _showLockOverlay() async {
+    if (_lockRouteOpen || !mounted) return;
+    _lockRouteOpen = true;
+    final navigator = Navigator.of(context, rootNavigator: true);
+    await navigator.push(
+      PageRouteBuilder<void>(
+        opaque: true,
+        transitionDuration: Duration.zero,
+        pageBuilder: (_, __, ___) => PopScope(
+          canPop: false,
+          child: PinLockScreen(
+            onUnlocked: () => navigator.pop(),
+            onReset: () async {
+              navigator.popUntil((r) => r.isFirst);
+              await _load();
+              if (mounted) setState(() => _unlocked = false);
+            },
+          ),
+        ),
+      ),
+    );
+    _lockRouteOpen = false;
   }
 
   Future<void> _load() async {

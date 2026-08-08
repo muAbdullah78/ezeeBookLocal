@@ -119,8 +119,17 @@ lib/
 - All tables have Row Level Security (RLS) - users can only access their own data via `auth.uid() = user_id`
 
 ## Local SQLite Tables
-Same structure as Supabase but without `user_id` column (only one user per device)
-- **Database version:** 2 (upgraded from 1 — drops old orders/measurements tables and recreates with new schema)
+The only data store. One shop per device, so there is no `user_id` column.
+- **Database version:** 7
+- Tables: `customers`, `orders`, `measurements`, `dupatta_details`, `shop_profiles`,
+  `stitch_categories`, `category_fields`
+- **v7:** adds `stitch_categories` + `category_fields` (tailor-defined stitching
+  categories) and `orders.category_id` / `orders.category_name`. The four
+  built-in categories are seeded rows keyed by `builtin_key`.
+- Custom-category measurements are stored in `measurements` with
+  `garment_type = 'cat:<category_id>'`, and their `additional_options` carries a
+  `_labels` / `_section` snapshot so a receipt stays truthful after the tailor
+  renames a field. See `core/constants/measurement_keys.dart`.
 
 ## Customer Model
 - **Fields:** id (UUID), name, phone, gender (male/female), serial_number (auto-increment), created_at, updated_at
@@ -284,3 +293,46 @@ Supabase project and Google Cloud receipt-verifier are no longer used by the app
 - Per-shop branding in PDFs (logo, footer)
 - Trial banner UX during timeUnverified state
 - Type B recurring discount promos (via Play Console Offer Codes)
+### 2026-08-08: Stage 2 — Tailor-defined stitching categories
+
+The "what to stitch?" screen was hard-coded to four options for every shop
+(plus two permanently disabled "coming soon" cards). Real shops run roughly
+8–15 men's categories and 20–30 women's, and every tailor measures their own
+way, so the catalogue is now the tailor's own data.
+
+Added:
+- `stitch_categories` + `category_fields` tables (DB **v7**), plus
+  `orders.category_id` and `orders.category_name`.
+- **Settings → Shop → Stitching Categories**: add, rename, re-icon (28-icon
+  curated picker), drag to reorder, hide, duplicate, delete.
+- Field builder per category: four field types — Measurement (number, inches),
+  Note (text), Yes/No (switch), Choose One (chips) — each with an optional Urdu
+  label and a section heading, reorderable.
+- `CustomMeasurementScreen`: schema-driven form for tailor-created categories.
+  `CategoryFieldValues` / `CategoryFieldsGroup`
+  (`features/orders/widgets/category_fields_form.dart`) hold the shared state
+  and rendering so the custom form and the built-in "extra fields" section
+  cannot drift apart.
+- The four built-ins are seeded rows carrying `builtin_key`. They keep their
+  hand-tuned form (which encodes linked options a generic builder can't express:
+  waistband → elastic width, women's full suit → dupatta finishing tree) and are
+  renameable / re-iconable / reorderable / hideable, and can be extended with
+  extra fields. "Duplicate" on a built-in clones a fully editable template.
+- Label snapshots (`_labels` / `_section` in `additional_options`) so the PDF,
+  order screen and customer profile can name a field the code has never heard
+  of — and so a receipt printed today still reads correctly after a rename.
+
+Removed: the `one_piece_suit` and `saari_blouse` "coming soon" cards. A tailor
+can now create those themselves, which is the point.
+
+Notes:
+- Built-in categories cannot be deleted (every past order references them); they
+  can be hidden.
+- Deleting a custom category warns how many orders used it; those orders keep
+  their `category_name` snapshot and still print correctly.
+- Backup format bumped to version 2 (categories included). Version 1 files still
+  restore — `importAllData` re-seeds the built-ins when a backup carries none.
+
+Still open (flagged, not changed): Urdu is unreachable at runtime
+(`supportedLocales` is pinned to `en` and `Directionality` to LTR in main.dart),
+and orders still cannot be edited or deleted after creation.

@@ -1,9 +1,50 @@
 import 'dart:typed_data';
 
+import 'package:flutter/services.dart' show rootBundle;
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'app_logger.dart';
+import 'garment_labels.dart';
+
 class PdfGenerator {
+  /// Urdu glyphs for the receipt.
+  ///
+  /// The built-in Helvetica faces contain no Arabic-script glyphs, so any
+  /// Urdu the tailor typed — instructions, a colour name, an Urdu shop or
+  /// customer name — silently dropped out of the worker's copy. These are
+  /// registered as a fallback so Latin text keeps its existing look while
+  /// Urdu still renders.
+  static pw.Font? _urduFont;
+  static bool _urduFontLoadAttempted = false;
+
+  static Future<void> _ensureUrduFont() async {
+    if (_urduFontLoadAttempted) return;
+    _urduFontLoadAttempted = true;
+    try {
+      _urduFont = pw.Font.ttf(
+          await rootBundle.load('assets/fonts/NotoNastaliqUrdu-Regular.ttf'));
+    } catch (e, st) {
+      // Never block a receipt on a missing font — fall back to Latin-only.
+      AppLogger.error('PdfGenerator', 'Urdu font load failed',
+          error: e, stackTrace: st);
+    }
+  }
+
+  static List<pw.Font> get _fallback =>
+      _urduFont == null ? const [] : [_urduFont!];
+
+  /// SQLite has no boolean type, so flags round-trip as `1`/`0` (and cloud
+  /// backups may carry real bools or strings). Comparing such a value with
+  /// `== true` silently fails, which previously hid the whole dupatta section
+  /// from every receipt. Normalise all of those spellings here.
+  static bool _isTrue(Object? v) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v?.toString().trim().toLowerCase();
+    return s == 'true' || s == '1' || s == 'yes';
+  }
+
   static const _teal = PdfColor.fromInt(0xFF26A69A);
   static const _tealDark = PdfColor.fromInt(0xFF00897B);
   static const _lightGrey = PdfColor.fromInt(0xFFE0E0E0);
@@ -20,9 +61,13 @@ class PdfGenerator {
     required int customerSerialNumber,
     required String customerGender,
     required String stitchType,
+    /// Name snapshotted on the order. Wins over [stitchType], which for a
+    /// tailor-defined category is an opaque id.
+    String? categoryName,
     String? shirtSubType,
     String? bottomType,
     String? bottomWaistband,
+    String? elasticWidth,
     required int quantity,
     required List<String> colors,
     required String orderDate,
@@ -33,17 +78,23 @@ class PdfGenerator {
     List<String>? extraInstructions,
     String? specialInstructions,
   }) async {
-    final pdf = pw.Document();
+    await _ensureUrduFont();
 
-    // TODO: Load Urdu font for bilingual PDF support
-    // final fontData = await rootBundle.load('assets/fonts/NotoNastaliqUrdu-Regular.ttf');
-    // final urduFont = pw.Font.ttf(fontData);
+    final pdf = pw.Document(
+      theme: pw.ThemeData.withFont(
+        base: pw.Font.helvetica(),
+        bold: pw.Font.helveticaBold(),
+        italic: pw.Font.helveticaOblique(),
+        fontFallback: _fallback,
+      ),
+    );
 
     final boldStyle = pw.TextStyle(
       fontSize: 11,
       fontWeight: pw.FontWeight.bold,
+      fontFallback: _fallback,
     );
-    final normalStyle = const pw.TextStyle(fontSize: 11);
+    final normalStyle = pw.TextStyle(fontSize: 11, fontFallback: _fallback);
     final headerStyle = pw.TextStyle(
       fontSize: 14,
       fontWeight: pw.FontWeight.bold,
@@ -55,7 +106,7 @@ class PdfGenerator {
     final phone = (shopProfile['phone'] ?? '').toString();
 
     final garmentStr = [
-      _garmentLabel(stitchType),
+      _garmentLabel(stitchType, categoryName: categoryName),
       if (shirtSubType != null && shirtSubType.isNotEmpty)
         _subTypeLabel(shirtSubType),
     ].where((s) => s.isNotEmpty).join(' | ');
@@ -63,9 +114,39 @@ class PdfGenerator {
       if (bottomType != null && bottomType.isNotEmpty)
         _subTypeLabel(bottomType),
       if (bottomWaistband != null && bottomWaistband.isNotEmpty)
-        bottomWaistband,
+        GarmentLabels.titleCase(bottomWaistband),
+      // Elastic/belt width is captured during measurement but never used to
+      // reach the worker's copy — without it the waistband cannot be sewn.
+      if (elasticWidth != null && elasticWidth.isNotEmpty)
+        '${GarmentLabels.titleCase(elasticWidth)}"',
     ].join(' | ');
-    final colorsStr = colors.isEmpty ? '-' : colors.join(', ');
+    // Normalise the groups once rather than re-decoding the snapshot per widget.
+    // A tailor-defined group arrives under an opaque `cat:<id>` and carries its
+    // real heading and field names in its options snapshot.
+    final groups = [
+      for (final g in measurementGroups)
+        _MeasurementGroup(
+          heading: GarmentLabels.groupLabel(
+            g['garmentType'] as String? ?? '',
+            g['additionalOptions'] as Map<String, dynamic>?,
+          ),
+          measurements: (g['measurements'] as Map<String, dynamic>?) ?? const {},
+          options: GarmentLabels.visibleOptions(
+              g['additionalOptions'] as Map<String, dynamic>?),
+          labels: GarmentLabels.labelSnapshot(
+              g['additionalOptions'] as Map<String, dynamic>?),
+        ),
+    ];
+
+    // One colour is captured PER SUIT, so a 3-suit order has 3 colours.
+    // Flattening them lost which suit is which; number them when it matters.
+    final colorsStr = colors.isEmpty
+        ? '-'
+        : (colors.length > 1
+            ? [
+                for (var i = 0; i < colors.length; i++) '${i + 1}. ${colors[i]}'
+              ].join('   ')
+            : colors.first);
 
     pdf.addPage(
       pw.MultiPage(
@@ -79,6 +160,7 @@ class PdfGenerator {
               shopName,
               style: pw.TextStyle(
                 font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
                 fontSize: 24,
                 color: _brand,
                 letterSpacing: 0.5,
@@ -95,6 +177,7 @@ class PdfGenerator {
                 ].join('  |  '),
                 style: pw.TextStyle(
                   font: pw.Font.helvetica(),
+                fontFallback: _fallback,
                   fontSize: 10,
                   color: _muted,
                 ),
@@ -114,6 +197,7 @@ class PdfGenerator {
                   'ORDER RECEIPT',
                   style: pw.TextStyle(
                     font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
                     fontSize: 11,
                     color: _brand,
                     letterSpacing: 2,
@@ -174,7 +258,9 @@ class PdfGenerator {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 _inlineLabel('Garment', garmentStr.isEmpty ? '-' : garmentStr),
-                _inlineLabel('Bottom', bottomStr.isEmpty ? '-' : bottomStr),
+                // A tailor-defined category has no shirt/bottom split, so an
+                // empty "Bottom: -" would just be noise on the worker's copy.
+                if (bottomStr.isNotEmpty) _inlineLabel('Bottom', bottomStr),
                 _inlineLabel('Quantity', quantity.toString()),
                 _inlineLabel('Color', colorsStr),
               ],
@@ -183,54 +269,57 @@ class PdfGenerator {
           pw.SizedBox(height: 14),
 
           // ── MEASUREMENTS ──
-          if (measurementGroups.isNotEmpty) ...[
+          if (groups.isNotEmpty) ...[
             _sectionHeader('Measurements', headerStyle),
             pw.SizedBox(height: 6),
-            for (final group in measurementGroups) ...[
+            for (final group in groups) ...[
               pw.SizedBox(height: 8),
               pw.Text(
-                _formatGarmentName(group['garmentType'] as String? ?? ''),
+                group.heading,
                 style: pw.TextStyle(
                   font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
                   fontSize: 12,
                   color: _brand,
                 ),
               ),
               pw.SizedBox(height: 4),
-              _buildMeasurementsTable(
-                  group['measurements'] as Map<String, dynamic>),
-              if ((group['additionalOptions'] as Map<String, dynamic>)
-                  .isNotEmpty)
-                _buildAdditionalOptionsBlock(
-                    group['additionalOptions'] as Map<String, dynamic>),
+              _buildMeasurementsTable(group.measurements, group.labels),
+              if (group.options.isNotEmpty)
+                _buildAdditionalOptionsBlock(group.options, group.labels),
             ],
             pw.SizedBox(height: 6),
           ],
 
           // ── DUPATTA DETAILS ──
           if (dupattaDetails != null &&
-              dupattaDetails['included'] == true) ...[
+              _isTrue(dupattaDetails['included'])) ...[
             _sectionHeader('Dupatta Details', headerStyle),
             pw.SizedBox(height: 6),
-            if (dupattaDetails['finishing'] != null)
-              _keyValue('Finishing', dupattaDetails['finishing'].toString(),
+            if ((dupattaDetails['finishing']?.toString() ?? '').isNotEmpty)
+              _keyValue('Finishing',
+                  _formatFinishing(dupattaDetails['finishing'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['pico_type'] != null)
-              _keyValue('Pico Type', dupattaDetails['pico_type'].toString(),
+              _keyValue('Pico Type',
+                  GarmentLabels.titleCase(dupattaDetails['pico_type'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['pico_coverage'] != null)
               _keyValue('Pico Coverage',
-                  dupattaDetails['pico_coverage'].toString(),
+                  GarmentLabels.titleCase(
+                      dupattaDetails['pico_coverage'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['piping_coverage'] != null)
               _keyValue('Piping Coverage',
-                  dupattaDetails['piping_coverage'].toString(),
+                  GarmentLabels.titleCase(
+                      dupattaDetails['piping_coverage'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['lace_coverage'] != null)
               _keyValue('Lace Coverage',
-                  dupattaDetails['lace_coverage'].toString(),
+                  GarmentLabels.titleCase(
+                      dupattaDetails['lace_coverage'].toString()),
                   boldStyle, normalStyle),
-            if (dupattaDetails['lace_provided_by_customer'] == true)
+            if (_isTrue(dupattaDetails['lace_provided_by_customer']))
               pw.Text('Lace provided by customer', style: normalStyle),
             pw.SizedBox(height: 14),
           ],
@@ -270,6 +359,7 @@ class PdfGenerator {
               'Thank you for choosing $shopName',
               style: pw.TextStyle(
                 font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
                 fontSize: 11,
                 color: _brand,
               ),
@@ -281,6 +371,7 @@ class PdfGenerator {
               'Generated by EzeeBook  |  ${_formatDateForFooter()}',
               style: pw.TextStyle(
                 font: pw.Font.helveticaOblique(),
+                fontFallback: _fallback,
                 fontSize: 8,
                 color: _footerGrey,
               ),
@@ -312,6 +403,7 @@ class PdfGenerator {
       text,
       style: pw.TextStyle(
         font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
         fontSize: 12,
         color: _brand,
       ),
@@ -328,6 +420,7 @@ class PdfGenerator {
             '$label: ',
             style: pw.TextStyle(
               font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
               fontSize: 10,
             ),
           ),
@@ -336,6 +429,7 @@ class PdfGenerator {
               value,
               style: pw.TextStyle(
                 font: pw.Font.helvetica(),
+                fontFallback: _fallback,
                 fontSize: 10,
               ),
             ),
@@ -352,6 +446,7 @@ class PdfGenerator {
           '$label: ',
           style: pw.TextStyle(
             font: pw.Font.helveticaBold(),
+                fontFallback: _fallback,
             fontSize: 10,
             color: _mutedDark,
           ),
@@ -360,6 +455,7 @@ class PdfGenerator {
           value,
           style: pw.TextStyle(
             font: pw.Font.helvetica(),
+                fontFallback: _fallback,
             fontSize: 10,
           ),
         ),
@@ -388,7 +484,10 @@ class PdfGenerator {
     );
   }
 
-  static pw.Widget _buildMeasurementsTable(Map<String, dynamic> data) {
+  static pw.Widget _buildMeasurementsTable(
+    Map<String, dynamic> data,
+    Map<String, String> labels,
+  ) {
     final entries = data.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
         .toList();
@@ -441,7 +540,7 @@ class PdfGenerator {
                 padding: const pw.EdgeInsets.symmetric(
                     horizontal: 8, vertical: 4),
                 child: pw.Text(
-                  _readableKey(entries[i].key),
+                  GarmentLabels.fieldLabel(entries[i].key, labels),
                   style: const pw.TextStyle(fontSize: 10),
                 ),
               ),
@@ -471,7 +570,9 @@ class PdfGenerator {
         .join(' ');
   }
 
-  static String _garmentLabel(String type) {
+  static String _garmentLabel(String type, {String? categoryName}) {
+    final snapshot = categoryName?.trim() ?? '';
+    if (snapshot.isNotEmpty) return snapshot;
     switch (type) {
       case 'full_suit':
         return 'Full Suit';
@@ -534,7 +635,9 @@ class PdfGenerator {
   }
 
   static pw.Widget _buildAdditionalOptionsBlock(
-      Map<String, dynamic> options) {
+    Map<String, dynamic> options,
+    Map<String, String> labels,
+  ) {
     final validEntries = options.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
         .toList();
@@ -559,7 +662,7 @@ class PdfGenerator {
             return pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 2),
               child: pw.Text(
-                '${_formatOptionKey(e.key)}: $displayValue',
+                '${GarmentLabels.fieldLabel(e.key, labels)}: $displayValue',
                 style: const pw.TextStyle(fontSize: 10),
               ),
             );
@@ -569,11 +672,15 @@ class PdfGenerator {
     );
   }
 
-  static String _formatOptionKey(String key) {
-    return key
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
+  /// Dupatta finishing is stored as a comma-joined list ("pico,lace").
+  /// Render it as "Pico, Lace" rather than dumping the raw string.
+  static String _formatFinishing(String raw) {
+    return raw
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .map(GarmentLabels.titleCase)
+        .join(', ');
   }
 
   static String _formatOptionValue(dynamic value) {
@@ -589,11 +696,20 @@ class PdfGenerator {
     return s;
   }
 
-  static String _formatGarmentName(String garmentType) {
-    if (garmentType.isEmpty) return '';
-    return garmentType
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
-  }
+}
+
+/// One measurement group ready to render: heading, values, options and the
+/// label snapshot needed to name a tailor-defined field.
+class _MeasurementGroup {
+  final String heading;
+  final Map<String, dynamic> measurements;
+  final Map<String, dynamic> options;
+  final Map<String, String> labels;
+
+  const _MeasurementGroup({
+    required this.heading,
+    required this.measurements,
+    required this.options,
+    required this.labels,
+  });
 }

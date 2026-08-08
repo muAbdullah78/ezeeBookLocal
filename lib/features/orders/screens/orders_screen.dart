@@ -80,14 +80,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
       filtered = filtered.where((o) => o['status'] == _selectedFilter).toList();
     }
 
-    // Search filter
+    // Search filter — the card shows "Name (#serial)" and the serial is the
+    // tailor's primary way of identifying a customer, so both it and the
+    // phone must be searchable, not just the name.
     if (_searchQuery.isNotEmpty) {
-      final q = _searchQuery.toLowerCase();
+      final q = _searchQuery.toLowerCase().replaceFirst('#', '').trim();
       filtered = filtered.where((o) {
         final name = (o['customer_name'] ?? '').toString().toLowerCase();
-        return name.contains(q);
+        final serial = (o['customer_serial'] ?? '').toString();
+        final phone =
+            (o['customer_phone'] ?? '').toString().replaceAll(RegExp(r'\D'), '');
+        return name.contains(q) ||
+            serial == q ||
+            (q.isNotEmpty && phone.contains(q));
       }).toList();
     }
+
+    // Newest first. The underlying query sorts by delivery_date ASC, which
+    // otherwise opens the list on last year's delivered orders and buries
+    // today's work at the bottom.
+    filtered.sort((a, b) => (b['created_at'] ?? '')
+        .toString()
+        .compareTo((a['created_at'] ?? '').toString()));
 
     setState(() => _filteredOrders = filtered);
   }
@@ -140,6 +154,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
         return 'order_status_delivered'.tr();
       case 'overdue':
         return 'order_overdue'.tr();
+      case 'cancelled':
+        // Without this the badge printed the raw English DB value, even in
+        // Urdu.
+        return 'order_cancelled'.tr();
       default:
         return status;
     }
@@ -165,21 +183,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String _garmentLabel(Map<String, dynamic> order) {
     final isUrdu = context.locale.languageCode == 'ur';
     String label;
-    switch (order['stitch_type']) {
-      case 'full_suit':
-        label = isUrdu ? 'مکمل سوٹ' : 'Full Suit';
-        break;
-      case 'naap_suit':
-        label = isUrdu ? 'ناپ سوٹ' : 'Naap Suit';
-        break;
-      case 'only_shirt':
-        label = isUrdu ? 'صرف قمیض' : 'Only Shirt';
-        break;
-      case 'only_shalwar_trouser':
-        label = isUrdu ? 'صرف شلوار/ٹراؤزر' : 'Only Shalwar/Trouser';
-        break;
-      default:
-        label = order['stitch_type'] ?? '';
+    // A tailor-defined category (or a renamed built-in) carries its own name;
+    // its raw stitch_type is an opaque id that must never reach the screen.
+    final snapshot = order['category_name']?.toString().trim() ?? '';
+    if (snapshot.isNotEmpty) {
+      label = snapshot;
+    } else {
+      switch (order['stitch_type']) {
+        case 'full_suit':
+          label = isUrdu ? 'مکمل سوٹ' : 'Full Suit';
+          break;
+        case 'naap_suit':
+          label = isUrdu ? 'ناپ سوٹ' : 'Naap Suit';
+          break;
+        case 'only_shirt':
+          label = isUrdu ? 'صرف قمیض' : 'Only Shirt';
+          break;
+        case 'only_shalwar_trouser':
+          label = isUrdu ? 'صرف شلوار/ٹراؤزر' : 'Only Shalwar/Trouser';
+          break;
+        default:
+          label = order['stitch_type'] ?? '';
+      }
     }
     final parts = <String>[];
     if (order['shirt_sub_type'] != null) parts.add(_subTypeLabel(order['shirt_sub_type'], isUrdu));
@@ -273,6 +298,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       body: Column(
         children: [
+          // Breathing room so the chips don't sit flush against the app bar.
+          const SizedBox(height: 16),
           // Filter tabs
           SizedBox(
             height: 44,
@@ -355,6 +382,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   }
 
   Widget _buildEmptyState() {
+    // Distinguish "this shop has no orders" from "your search/filter matched
+    // nothing" — telling a tailor with 200 orders that they have none reads
+    // as data loss.
+    final isNarrowed = _searchQuery.isNotEmpty || _selectedFilter != 'all';
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -368,15 +399,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 color: AppColors.orderAccent,
                 borderRadius: BorderRadius.circular(20),
               ),
-              child: const Icon(
-                Icons.receipt_long_outlined,
+              child: Icon(
+                isNarrowed
+                    ? Icons.search_off_rounded
+                    : Icons.receipt_long_outlined,
                 size: 40,
                 color: AppColors.warning,
               ),
             ),
             const SizedBox(height: 20),
             Text(
-              'no_orders_yet'.tr(),
+              isNarrowed ? 'no_results_found'.tr() : 'no_orders_yet'.tr(),
               style: const TextStyle(
                 fontSize: 16,
                 color: AppColors.textSecondary,

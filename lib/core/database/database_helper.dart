@@ -21,7 +21,7 @@ class DatabaseHelper {
 
     return await openDatabase(
       path,
-      version: 6,
+      version: 7,
       onCreate: _onCreate,
       onUpgrade: _onUpgrade,
     );
@@ -33,6 +33,9 @@ class DatabaseHelper {
     await _createMeasurementsTable(db);
     await _createDupattaDetailsTable(db);
     await _createShopProfilesTable(db);
+    await _createStitchCategoriesTable(db);
+    await _createCategoryFieldsTable(db);
+    await seedBuiltinCategories(db);
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
@@ -72,6 +75,26 @@ class DatabaseHelper {
         // shop_profiles may not exist yet on very old installs — ignore.
       }
     }
+    if (oldVersion < 7) {
+      // v7: tailor-defined stitching categories. The four categories the app
+      // shipped with become editable rows here; anything the tailor creates
+      // lives alongside them.
+      await _createStitchCategoriesTable(db);
+      await _createCategoryFieldsTable(db);
+      await seedBuiltinCategories(db);
+
+      // Orders remember which category produced them, plus a snapshot of its
+      // name. The snapshot matters: renaming or deleting a category later must
+      // not rewrite the history of orders already handed to a worker.
+      for (final column in ['category_id TEXT', 'category_name TEXT']) {
+        try {
+          await db.execute('ALTER TABLE orders ADD COLUMN $column');
+        } catch (_) {
+          // Already present (a v1 install recreates `orders` from the current
+          // schema on the way up) — nothing to do.
+        }
+      }
+    }
   }
 
   Future<void> _createCustomersTable(Database db) async {
@@ -94,6 +117,8 @@ class DatabaseHelper {
         id TEXT PRIMARY KEY,
         customer_id TEXT NOT NULL,
         stitch_type TEXT NOT NULL,
+        category_id TEXT,
+        category_name TEXT,
         customer_gender TEXT NOT NULL,
         shirt_sub_type TEXT,
         bottom_type TEXT,
@@ -164,6 +189,215 @@ class DatabaseHelper {
     ''');
   }
 
+  Future<void> _createStitchCategoriesTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS stitch_categories (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        name_urdu TEXT,
+        gender TEXT NOT NULL DEFAULT 'both',
+        icon_key TEXT NOT NULL DEFAULT 'checkroom',
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        hidden INTEGER NOT NULL DEFAULT 0,
+        builtin_key TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  Future<void> _createCategoryFieldsTable(Database db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS category_fields (
+        id TEXT PRIMARY KEY,
+        category_id TEXT NOT NULL,
+        group_label TEXT NOT NULL DEFAULT '',
+        field_key TEXT NOT NULL,
+        label TEXT NOT NULL,
+        label_urdu TEXT,
+        field_type TEXT NOT NULL DEFAULT 'number',
+        options TEXT,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (category_id, field_key),
+        FOREIGN KEY (category_id) REFERENCES stitch_categories (id) ON DELETE CASCADE
+      )
+    ''');
+  }
+
+  // ==================== STITCH CATEGORY OPERATIONS ====================
+
+  /// The categories the app ships with. They are seeded as ordinary rows so the
+  /// tailor can rename, re-icon, reorder and hide them, but they keep their
+  /// `builtin_key` so the hand-tuned measurement form (and every order already
+  /// saved against the old string values) still resolves.
+  static const List<Map<String, String>> builtinCategorySeeds = [
+    {
+      'key': 'full_suit',
+      'name': 'Full Suit',
+      'urdu': 'مکمل سوٹ',
+      'icon': 'checkroom',
+    },
+    {
+      'key': 'only_shirt',
+      'name': 'Only Shirt',
+      'urdu': 'صرف قمیض',
+      'icon': 'dry_cleaning',
+    },
+    {
+      'key': 'only_shalwar_trouser',
+      'name': 'Only Shalwar/Trouser',
+      'urdu': 'صرف شلوار/ٹراؤزر',
+      'icon': 'straighten',
+    },
+    {
+      'key': 'naap_suit',
+      'name': 'Naap Suit',
+      'urdu': 'ناپ سوٹ',
+      'icon': 'square_foot',
+    },
+  ];
+
+  /// Insert any missing built-in category. Idempotent, and safe to call on a
+  /// fresh install, on upgrade, and after a backup restore (an older backup
+  /// carries no categories at all).
+  ///
+  /// Matching on `builtin_key` means a tailor who renamed "Full Suit" to
+  /// "Poora Suit" does not get a duplicate on the next upgrade.
+  Future<void> seedBuiltinCategories(DatabaseExecutor db) async {
+    final now = DateTime.now().toIso8601String();
+    for (var i = 0; i < builtinCategorySeeds.length; i++) {
+      final seed = builtinCategorySeeds[i];
+      final existing = await db.query(
+        'stitch_categories',
+        columns: ['id'],
+        where: 'builtin_key = ?',
+        whereArgs: [seed['key']],
+        limit: 1,
+      );
+      if (existing.isNotEmpty) continue;
+      await db.insert('stitch_categories', {
+        'id': 'builtin_${seed['key']}',
+        'name': seed['name'],
+        'name_urdu': seed['urdu'],
+        'gender': 'both',
+        'icon_key': seed['icon'],
+        'sort_order': i,
+        'hidden': 0,
+        'builtin_key': seed['key'],
+        'created_at': now,
+        'updated_at': now,
+      });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> getStitchCategories() async {
+    final db = await database;
+    return await db.query('stitch_categories', orderBy: 'sort_order ASC, name ASC');
+  }
+
+  Future<Map<String, dynamic>?> getStitchCategory(String id) async {
+    final db = await database;
+    final rows = await db
+        .query('stitch_categories', where: 'id = ?', whereArgs: [id], limit: 1);
+    return rows.isNotEmpty ? rows.first : null;
+  }
+
+  Future<List<Map<String, dynamic>>> getCategoryFields(String categoryId) async {
+    final db = await database;
+    return await db.query(
+      'category_fields',
+      where: 'category_id = ?',
+      whereArgs: [categoryId],
+      orderBy: 'sort_order ASC, created_at ASC',
+    );
+  }
+
+  /// All fields for every category, for callers that would otherwise issue one
+  /// query per category (the order flow and the manage screen both do).
+  Future<List<Map<String, dynamic>>> getAllCategoryFields() async {
+    final db = await database;
+    return await db.query('category_fields',
+        orderBy: 'sort_order ASC, created_at ASC');
+  }
+
+  Future<void> upsertStitchCategory(Map<String, dynamic> category) async {
+    final db = await database;
+    await db.insert('stitch_categories', category,
+        conflictAlgorithm: ConflictAlgorithm.replace);
+  }
+
+  /// Replace a category's whole field list in one transaction.
+  ///
+  /// The editor works on an in-memory list (add, rename, reorder, remove), so
+  /// saving is a wholesale swap. Doing it transactionally means a crash cannot
+  /// leave a category with half its measurement form.
+  Future<void> replaceCategoryFields(
+    String categoryId,
+    List<Map<String, dynamic>> fields,
+  ) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn
+          .delete('category_fields', where: 'category_id = ?', whereArgs: [categoryId]);
+      for (final f in fields) {
+        await txn.insert('category_fields', f,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+    });
+  }
+
+  /// Persist a new display order. Written in one transaction so an interrupted
+  /// drag cannot leave two categories claiming the same slot.
+  Future<void> updateCategoryOrder(List<String> orderedIds) async {
+    final db = await database;
+    final now = DateTime.now().toIso8601String();
+    await db.transaction((txn) async {
+      for (var i = 0; i < orderedIds.length; i++) {
+        await txn.update(
+          'stitch_categories',
+          {'sort_order': i, 'updated_at': now},
+          where: 'id = ?',
+          whereArgs: [orderedIds[i]],
+        );
+      }
+    });
+  }
+
+  Future<void> setCategoryHidden(String id, bool hidden) async {
+    final db = await database;
+    await db.update(
+      'stitch_categories',
+      {'hidden': hidden ? 1 : 0, 'updated_at': DateTime.now().toIso8601String()},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Delete a category and its fields. Built-ins are protected by the caller.
+  ///
+  /// Orders already placed keep their `category_name` snapshot, so deleting a
+  /// category never blanks out a receipt that has already gone to a worker.
+  Future<void> deleteStitchCategory(String id) async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('category_fields', where: 'category_id = ?', whereArgs: [id]);
+      await txn.delete('stitch_categories', where: 'id = ?', whereArgs: [id]);
+    });
+  }
+
+  /// How many orders were placed against a category. Shown before deleting so
+  /// the tailor knows what history is involved.
+  Future<int> getOrderCountForCategory(String categoryId) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM orders WHERE category_id = ?',
+      [categoryId],
+    );
+    return (result.first['count'] as int?) ?? 0;
+  }
+
   // ==================== SHOP PROFILE OPERATIONS ====================
 
   /// Insert or replace the shop profile row. Always keyed by [kLocalShopId].
@@ -217,15 +451,23 @@ class DatabaseHelper {
     final db = await database;
     // Manually clean up dependent rows — foreign-key cascade is not
     // guaranteed to be enabled on the local SQLite connection.
-    final orders = await db.query('orders',
-        columns: ['id'], where: 'customer_id = ?', whereArgs: [id]);
-    for (final o in orders) {
-      final orderId = o['id'] as String;
-      await db.delete('dupatta_details', where: 'order_id = ?', whereArgs: [orderId]);
-    }
-    await db.delete('measurements', where: 'customer_id = ?', whereArgs: [id]);
-    await db.delete('orders', where: 'customer_id = ?', whereArgs: [id]);
-    return await db.delete('customers', where: 'id = ?', whereArgs: [id]);
+    //
+    // Runs in a transaction so the customer is removed either completely or
+    // not at all. Previously these were four independent statements: a crash
+    // or a process kill part-way through (routine on Android) left orphaned
+    // orders and measurements behind, permanently invisible in the UI but
+    // still counted on the dashboard.
+    return await db.transaction<int>((txn) async {
+      final orders = await txn.query('orders',
+          columns: ['id'], where: 'customer_id = ?', whereArgs: [id]);
+      for (final o in orders) {
+        await txn.delete('dupatta_details',
+            where: 'order_id = ?', whereArgs: [o['id'] as String]);
+      }
+      await txn.delete('measurements', where: 'customer_id = ?', whereArgs: [id]);
+      await txn.delete('orders', where: 'customer_id = ?', whereArgs: [id]);
+      return await txn.delete('customers', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<List<Map<String, dynamic>>> searchCustomers(String query) async {
@@ -323,9 +565,13 @@ class DatabaseHelper {
   Future<int> deleteOrder(String id) async {
     final db = await database;
     // Manually clean up children — cascade is not guaranteed to be enabled.
-    await db.delete('dupatta_details', where: 'order_id = ?', whereArgs: [id]);
-    await db.delete('measurements', where: 'order_id = ?', whereArgs: [id]);
-    return await db.delete('orders', where: 'id = ?', whereArgs: [id]);
+    // Transactional for the same reason as deleteCustomer: a partial delete
+    // would leave orphaned measurements and dupatta rows behind.
+    return await db.transaction<int>((txn) async {
+      await txn.delete('dupatta_details', where: 'order_id = ?', whereArgs: [id]);
+      await txn.delete('measurements', where: 'order_id = ?', whereArgs: [id]);
+      return await txn.delete('orders', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   Future<int> getActiveOrderCount() async {
@@ -348,7 +594,9 @@ class DatabaseHelper {
     final db = await database;
     final today = DateTime.now().toIso8601String().substring(0, 10);
     return await db.rawQuery('''
-      SELECT orders.*, customers.name as customer_name
+      SELECT orders.*, customers.name as customer_name,
+             customers.phone as customer_phone,
+             customers.serial_number as customer_serial
       FROM orders
       INNER JOIN customers ON orders.customer_id = customers.id
       WHERE orders.delivery_date = ? AND orders.status = 'pending'
@@ -360,7 +608,9 @@ class DatabaseHelper {
     final db = await database;
     final today = DateTime.now().toIso8601String().substring(0, 10);
     return await db.rawQuery('''
-      SELECT orders.*, customers.name as customer_name
+      SELECT orders.*, customers.name as customer_name,
+             customers.phone as customer_phone,
+             customers.serial_number as customer_serial
       FROM orders
       INNER JOIN customers ON orders.customer_id = customers.id
       WHERE orders.status = 'pending' AND orders.delivery_date < ?
@@ -372,7 +622,9 @@ class DatabaseHelper {
     final db = await database;
     final today = DateTime.now().toIso8601String().substring(0, 10);
     return await db.rawQuery('''
-      SELECT orders.*, customers.name as customer_name
+      SELECT orders.*, customers.name as customer_name,
+             customers.phone as customer_phone,
+             customers.serial_number as customer_serial
       FROM orders
       INNER JOIN customers ON orders.customer_id = customers.id
       WHERE orders.status = 'completed' AND orders.delivery_date < ?
@@ -462,6 +714,8 @@ class DatabaseHelper {
       'measurements': await rows('measurements'),
       'dupatta_details': await rows('dupatta_details'),
       'shop_profiles': await rows('shop_profiles'),
+      'stitch_categories': await rows('stitch_categories'),
+      'category_fields': await rows('category_fields'),
     };
   }
 
@@ -481,6 +735,8 @@ class DatabaseHelper {
       await txn.delete('orders');
       await txn.delete('customers');
       await txn.delete('shop_profiles');
+      await txn.delete('category_fields');
+      await txn.delete('stitch_categories');
 
       // Insert parents first, then children.
       for (final r in rows(data['customers'])) {
@@ -504,6 +760,20 @@ class DatabaseHelper {
         await txn.insert('shop_profiles', r,
             conflictAlgorithm: ConflictAlgorithm.replace);
       }
+      // Categories before their fields (the field rows reference them).
+      for (final r in rows(data['stitch_categories'])) {
+        await txn.insert('stitch_categories', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+      for (final r in rows(data['category_fields'])) {
+        await txn.insert('category_fields', r,
+            conflictAlgorithm: ConflictAlgorithm.replace);
+      }
+
+      // A backup taken before v7 has no categories at all. Without this the
+      // restore would leave the tailor with an empty "what to stitch" screen
+      // and no way to place an order.
+      await seedBuiltinCategories(txn);
     });
   }
 
@@ -516,6 +786,9 @@ class DatabaseHelper {
     await db.delete('measurements');
     await db.delete('orders');
     await db.delete('customers');
+    await db.delete('category_fields');
+    await db.delete('stitch_categories');
+    await seedBuiltinCategories(db);
   }
 
   /// Fully clear the local database by closing it and deleting the file.

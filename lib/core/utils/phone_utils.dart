@@ -15,8 +15,12 @@ class PhoneUtils {
     if (raw.isEmpty) return null;
 
     // Strip all non-digit characters (including +, spaces, dashes)
-    final digits = raw.replaceAll(RegExp(r'[^\d]'), '');
+    var digits = raw.replaceAll(RegExp(r'[^\d]'), '');
     if (digits.isEmpty) return null;
+
+    // "0092..." is the usual way to write an international dial-out locally.
+    // Without this the leading-zero rule below turned it into "92092...".
+    if (digits.startsWith('00')) digits = digits.substring(2);
 
     // Local format: 03XXXXXXXXX → 92 + 3XXXXXXXXX
     if (digits.startsWith('0') && digits.length >= 10) {

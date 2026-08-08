@@ -4,15 +4,15 @@ import 'dart:io' show Platform;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/measurement_keys.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/page_transitions.dart';
-import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../dashboard/screens/main_shell.dart';
 import '../widgets/extra_instructions_widget.dart';
@@ -24,6 +24,14 @@ class OrderDetailsScreen extends StatefulWidget {
   final String customerGender;
   final int customerSerialNumber;
   final String stitchType;
+
+  /// The catalogue entry the order was placed from, and a snapshot of its name.
+  ///
+  /// The snapshot is deliberate: renaming or deleting a category later must not
+  /// rewrite what a receipt already handed to a worker said.
+  final String? categoryId;
+  final String? categoryName;
+
   final String? shirtSubType;
   final String? bottomType;
   final String? bottomWaistband;
@@ -32,6 +40,12 @@ class OrderDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> shirtAdditionalOptions;
   final Map<String, dynamic> bottomMeasurementData;
   final Map<String, dynamic> bottomAdditionalOptions;
+
+  /// Values from a tailor-defined category: the whole form for a custom
+  /// category, or the extra fields added on top of a built-in one.
+  final Map<String, dynamic> customMeasurementData;
+  final Map<String, dynamic> customAdditionalOptions;
+
   final Map<String, dynamic>? dupattaDetails;
   final List<Map<String, dynamic>> extraInstructions;
 
@@ -43,6 +57,8 @@ class OrderDetailsScreen extends StatefulWidget {
     required this.customerGender,
     required this.customerSerialNumber,
     required this.stitchType,
+    this.categoryId,
+    this.categoryName,
     this.shirtSubType,
     this.bottomType,
     this.bottomWaistband,
@@ -51,6 +67,8 @@ class OrderDetailsScreen extends StatefulWidget {
     required this.shirtAdditionalOptions,
     required this.bottomMeasurementData,
     required this.bottomAdditionalOptions,
+    this.customMeasurementData = const {},
+    this.customAdditionalOptions = const {},
     this.dupattaDetails,
     required this.extraInstructions,
   });
@@ -73,6 +91,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   String _shopName = '';
   String _shopPhone = '';
+
+  /// The order row as saved, kept so the confirmation message can be built
+  /// from the same data the rest of the app will read back later.
+  Map<String, dynamic>? _savedOrder;
 
   static const _presetColors = [
     {'name': 'Red', 'urdu': 'سرخ', 'color': Colors.red},
@@ -193,6 +215,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final isUrdu = context.locale.languageCode == 'ur';
     String label;
 
+    // A tailor-defined category (or a renamed built-in) carries its own name.
+    final custom = widget.categoryName?.trim() ?? '';
+    if (custom.isNotEmpty) {
+      label = custom;
+      final customParts = <String>[
+        if (widget.shirtSubType != null) _subTypeLabel(widget.shirtSubType!),
+        if (widget.bottomType != null) _subTypeLabel(widget.bottomType!),
+      ];
+      if (customParts.isNotEmpty) label += ' — ${customParts.join(' + ')}';
+      return label;
+    }
+
     switch (widget.stitchType) {
       case 'full_suit':
         label = isUrdu ? 'مکمل سوٹ' : 'Full Suit';
@@ -249,31 +283,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
   }
 
-  String _garmentLabelForWhatsApp() {
-    String label;
-    switch (widget.stitchType) {
-      case 'full_suit':
-        label = 'Full Suit';
-        break;
-      case 'naap_suit':
-        label = 'Naap Suit';
-        break;
-      case 'only_shirt':
-        label = 'Only Shirt';
-        break;
-      case 'only_shalwar_trouser':
-        label = 'Only Shalwar/Trouser';
-        break;
-      default:
-        label = widget.stitchType;
-    }
-    final parts = <String>[];
-    if (widget.shirtSubType != null) parts.add(_subTypeLabel(widget.shirtSubType!));
-    if (widget.bottomType != null) parts.add(_subTypeLabel(widget.bottomType!));
-    if (parts.isNotEmpty) label += ' — ${parts.join(' + ')}';
-    return label;
-  }
-
   // ==================== VALIDATION & SAVE ====================
 
   bool _validate() {
@@ -306,6 +315,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   Future<void> _confirmOrder() async {
     if (!_validate()) return;
+    // The success dialog can be dismissed with the Android back button, which
+    // returns to a live Confirm button. Without this guard a second tap wrote
+    // a duplicate order, duplicate measurements and a duplicate dupatta row.
+    if (_savedOrder != null) {
+      _showSuccessDialog();
+      return;
+    }
     setState(() => _isSaving = true);
 
     try {
@@ -318,6 +334,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         'id': orderId,
         'customer_id': widget.customerId,
         'stitch_type': widget.stitchType,
+        'category_id': widget.categoryId,
+        'category_name': widget.categoryName,
         'customer_gender': widget.customerGender,
         'shirt_sub_type': widget.shirtSubType,
         'bottom_type': widget.bottomType,
@@ -338,6 +356,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       };
 
       await _sync.saveOrder(order);
+      _savedOrder = order;
 
       // Save shirt measurements
       if (widget.shirtMeasurementData.isNotEmpty) {
@@ -362,6 +381,24 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           'garment_type': 'shalwar_trouser',
           'measurement_data': json.encode(widget.bottomMeasurementData),
           'additional_options': json.encode(widget.bottomAdditionalOptions),
+          'created_at': now,
+          'updated_at': now,
+        });
+      }
+
+      // Save the tailor-defined fields (a whole custom category, or the extras
+      // added to a built-in one) as their own group.
+      final categoryId = widget.categoryId;
+      if (categoryId != null &&
+          (widget.customMeasurementData.isNotEmpty ||
+              widget.customAdditionalOptions.isNotEmpty)) {
+        await _sync.saveMeasurement({
+          'id': const Uuid().v4(),
+          'customer_id': widget.customerId,
+          'order_id': orderId,
+          'garment_type': categoryGarmentType(categoryId),
+          'measurement_data': json.encode(widget.customMeasurementData),
+          'additional_options': json.encode(widget.customAdditionalOptions),
           'created_at': now,
           'updated_at': now,
         });
@@ -402,7 +439,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
         content: Column(
@@ -499,52 +538,41 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           ],
         ),
       ),
+      ),
     );
   }
 
+  /// Send the confirmation for the order that was just saved.
+  ///
+  /// The message is built by [WhatsAppService] from the stored order row —
+  /// the same code path the order screen uses to re-send it later — so the
+  /// customer never receives two differently-worded confirmations.
   Future<void> _sendWhatsApp() async {
-    final colors = _colorControllers.map((c) => c.text.trim()).join(', ');
-    final today = _formatDate(DateTime.now());
-    final delivery = _deliveryDate != null ? _formatDate(_deliveryDate!) : '';
-
-    final message = '''
-🧵 EzeeBook — Order Confirmation 🧵
-━━━━━━━━━━━━━━━━━━━━━
-Assalam o Alaikum! ✨
-Your order has been placed successfully.
-آپ کا آرڈر کامیابی سے درج ہو گیا ہے۔
-
-👤 Customer: ${widget.customerName} (#${widget.customerSerialNumber})
-👔 Garment: ${_garmentLabelForWhatsApp()}
-🔢 Quantity: $_quantity suit(s)
-🎨 Colors: $colors
-📅 Order Date: $today
-📅 Delivery Date: $delivery
-
-Thank you for choosing us!
-ہم پر اعتماد کرنے کا شکریہ! 🤲
-━━━━━━━━━━━━━━━━━━━━━
-✂️ $_shopName
-📞 $_shopPhone''';
-
-    final phoneNumber = PhoneUtils.toWhatsAppFormat(widget.customerPhone);
-    if (phoneNumber == null || phoneNumber.isEmpty) {
-      if (mounted) {
-        SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
-        _navigateToDashboard();
-      }
+    final order = _savedOrder;
+    if (order == null) {
+      _navigateToDashboard();
       return;
     }
 
-    final uri = Uri.parse(
-      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message.trim())}',
+    final message = WhatsAppService().buildOrderConfirmation(
+      order: order,
+      shopProfile: {'shop_name': _shopName, 'phone': _shopPhone},
+      customerName: widget.customerName,
+      customerSerial: widget.customerSerialNumber,
     );
 
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+    final result = await WhatsAppService().send(
+      phone: widget.customerPhone,
+      message: message,
+    );
 
-    if (mounted) _navigateToDashboard();
+    if (!mounted) return;
+    if (result == WhatsAppSendResult.invalidNumber) {
+      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
+    } else if (result == WhatsAppSendResult.launchFailed) {
+      SnackbarHelper.showError(context, 'whatsapp_open_failed'.tr());
+    }
+    _navigateToDashboard();
   }
 
   void _navigateToDashboard() {

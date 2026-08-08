@@ -2,8 +2,11 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/measurement_keys.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../models/measurement.dart';
+import '../../../models/stitch_category.dart';
+import '../widgets/category_fields_form.dart';
 import '../widgets/extra_instructions_widget.dart';
 import 'order_details_screen.dart';
 
@@ -16,6 +19,11 @@ class MeasurementScreen extends StatefulWidget {
   final String stitchType;
   final List<Measurement>? savedMeasurements;
 
+  /// The catalogue entry this order was started from. Carries the (possibly
+  /// renamed) display name recorded on the order, plus any extra fields the
+  /// tailor added on top of this built-in form.
+  final StitchCategory? category;
+
   const MeasurementScreen({
     super.key,
     required this.customerId,
@@ -25,6 +33,7 @@ class MeasurementScreen extends StatefulWidget {
     required this.customerSerialNumber,
     required this.stitchType,
     this.savedMeasurements,
+    this.category,
   });
 
   @override
@@ -102,6 +111,10 @@ class _MeasurementScreenState extends State<MeasurementScreen>
 
   // Extra instructions
   List<Map<String, dynamic>> _extraInstructions = [];
+
+  /// Fields the tailor added on top of this built-in form. Null when the
+  /// category has none, which is the common case.
+  CategoryFieldValues? _extraValues;
 
   // ==================== MEN'S FIELD DEFINITIONS ====================
 
@@ -321,6 +334,11 @@ class _MeasurementScreenState extends State<MeasurementScreen>
       }
     });
 
+    final extraFields = widget.category?.fields ?? const <CategoryField>[];
+    if (extraFields.isNotEmpty) {
+      _extraValues = CategoryFieldValues(extraFields);
+    }
+
     _initControllers();
     _prefillFromSaved();
 
@@ -371,10 +389,26 @@ class _MeasurementScreenState extends State<MeasurementScreen>
     if (widget.savedMeasurements == null) return;
 
     for (final m in widget.savedMeasurements!) {
+      // A row belonging to this category's extra fields, not to the built-in
+      // shirt/bottom buckets.
+      if (isCategoryGarmentType(m.garmentType)) {
+        _extraValues?.prefillFrom(m);
+        continue;
+      }
+
       final data = m.measurements;
-      final options = m.additionalOptions != null
-          ? json.decode(m.additionalOptions!) as Map<String, dynamic>
-          : <String, dynamic>{};
+      // Runs from initState — an unguarded decode (or a bad cast) here would
+      // take the whole measurement screen down instead of just skipping a
+      // damaged record.
+      Map<String, dynamic> options = <String, dynamic>{};
+      if (m.additionalOptions != null && m.additionalOptions!.isNotEmpty) {
+        try {
+          final decoded = json.decode(m.additionalOptions!);
+          if (decoded is Map) options = Map<String, dynamic>.from(decoded);
+        } catch (_) {
+          // Ignore an unreadable options blob and keep the measurements.
+        }
+      }
 
       if (m.garmentType == 'shirt') {
         if (_isMale) {
@@ -403,9 +437,14 @@ class _MeasurementScreenState extends State<MeasurementScreen>
       } else if (m.garmentType == 'shalwar_trouser') {
         final bottomType = options['bottom_type'] ?? 'trouser';
         if (_isMale) {
+          // Restore the tab in both directions — without the else a saved
+          // trouser record left the tab wherever it happened to be.
           if (bottomType == 'shalwar') {
             _menBottomTabController.index = 1;
             _menSelectedBottomType = 'shalwar';
+          } else {
+            _menBottomTabController.index = 0;
+            _menSelectedBottomType = 'trouser';
           }
           for (final entry in data.entries) {
             if (_menBottomControllers.containsKey(entry.key)) {
@@ -457,6 +496,7 @@ class _MeasurementScreenState extends State<MeasurementScreen>
       c.dispose();
     }
     _customElasticWidthController.dispose();
+    _extraValues?.dispose();
     super.dispose();
   }
 
@@ -598,6 +638,19 @@ class _MeasurementScreenState extends State<MeasurementScreen>
       }
     }
 
+    // Fields the tailor added on top of this built-in category, saved as their
+    // own measurement group so the receipt prints them under the category name.
+    final category = widget.category;
+    var extraData = <String, dynamic>{};
+    var extraOptions = <String, dynamic>{};
+    if (_extraValues != null && category != null) {
+      extraData = _extraValues!.collectMeasurements();
+      extraOptions = _extraValues!.collectOptions(sectionName: category.name);
+      if (extraOptions.isEmpty && extraData.isNotEmpty) {
+        extraOptions = _extraValues!.labelOnlyOptions(sectionName: category.name);
+      }
+    }
+
     if (!mounted) return;
 
     Navigator.of(context).push(
@@ -609,6 +662,10 @@ class _MeasurementScreenState extends State<MeasurementScreen>
           customerGender: widget.customerGender,
           customerSerialNumber: widget.customerSerialNumber,
           stitchType: widget.stitchType,
+          categoryId: category?.id,
+          categoryName: category?.name,
+          customMeasurementData: extraData,
+          customAdditionalOptions: extraOptions,
           shirtSubType: shirtSubType,
           bottomType: bottomType,
           bottomWaistband: waistband,
@@ -677,6 +734,16 @@ class _MeasurementScreenState extends State<MeasurementScreen>
                     if (_showDupatta) ...[
                       const SizedBox(height: 20),
                       _buildDupattaSection(),
+                    ],
+                    if (_extraValues != null) ...[
+                      const SizedBox(height: 20),
+                      CategoryFieldsGroup(
+                        title: 'extra_fields'.tr(),
+                        icon: Icons.tune,
+                        fields: _extraValues!.fields,
+                        values: _extraValues!,
+                        onChanged: () => setState(() => _isDirty = true),
+                      ),
                     ],
                     const SizedBox(height: 20),
                     ExtraInstructionsWidget(

@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/page_transitions.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../../customers/screens/add_customer_screen.dart';
 import '../../orders/screens/order_view_screen.dart';
@@ -47,7 +49,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _confirmMarkCompleted(String orderId) async {
+  Future<void> _confirmMarkCompleted(Map<String, dynamic> order) async {
+    final orderId = order['id'] as String;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -74,7 +77,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (confirmed != true) return;
 
     await _sync.updateOrderStatus(orderId, 'completed');
+    if (!mounted) return;
     _loadStats();
+
+    // The row leaves Today's Deliveries the moment it is completed, so this is
+    // the last chance to offer the "your order is ready" message from here.
+    final phone = (order['customer_phone'] ?? '').toString();
+    if (phone.isEmpty) return;
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('send_order_ready'.tr()),
+        content: Text('send_ready_prompt'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('not_now'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('send'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (send == true && mounted) {
+      await _sendReadyMessage({...order, 'status': 'completed'});
+    }
+  }
+
+  /// Send the "your order is ready" WhatsApp message straight from the
+  /// dashboard, so the tailor can notify a customer without opening the order.
+  Future<void> _sendReadyMessage(Map<String, dynamic> order) async {
+    final phone = (order['customer_phone'] ?? '').toString();
+    if (phone.isEmpty) {
+      SnackbarHelper.showInfo(context, 'no_phone_number'.tr());
+      return;
+    }
+    final profile = await _sync.getShopProfile();
+    final message = WhatsAppService().buildOrderReady(
+      order: order,
+      shopProfile: profile,
+    );
+    final result = await WhatsAppService().send(phone: phone, message: message);
+    if (!mounted) return;
+    if (result == WhatsAppSendResult.invalidNumber) {
+      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
+    } else if (result == WhatsAppSendResult.launchFailed) {
+      SnackbarHelper.showError(context, 'whatsapp_open_failed'.tr());
+    }
   }
 
   Future<void> _navigateToAddCustomer() async {
@@ -86,6 +142,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _garmentLabel(Map<String, dynamic> order) {
     final isUrdu = context.locale.languageCode == 'ur';
+    // A tailor-defined category (or a renamed built-in) carries its own name;
+    // its raw stitch_type is an opaque id that must never reach the screen.
+    final snapshot = order['category_name']?.toString().trim() ?? '';
+    if (snapshot.isNotEmpty) return snapshot;
     switch (order['stitch_type']) {
       case 'full_suit':
         return isUrdu ? 'مکمل سوٹ' : 'Full Suit';
@@ -547,7 +607,7 @@ Widget _buildQuickActions(BuildContext context) {
                 SizedBox(
                   height: 34,
                   child: ElevatedButton(
-                    onPressed: () => _confirmMarkCompleted(order['id']),
+                    onPressed: () => _confirmMarkCompleted(order),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,

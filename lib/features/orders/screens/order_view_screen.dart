@@ -7,12 +7,12 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus, XFile;
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/garment_labels.dart';
 import '../../../core/utils/pdf_generator.dart';
-import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/measurement.dart';
 import '../../../services/error_reporter.dart';
@@ -30,7 +30,10 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   final _sync = SyncService();
   late Map<String, dynamic> _order;
   List<Measurement> _measurements = [];
+  Map<String, dynamic>? _shopProfile;
   bool _measurementsExpanded = false;
+  /// Guards PDF generation until the measurements have actually been read.
+  bool _detailsLoaded = false;
 
   @override
   void initState() {
@@ -40,11 +43,58 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   }
 
   Future<void> _loadDetails() async {
-    final measMaps = await _sync.getMeasurementsForOrder(_order['id']);
-    if (mounted) {
+    try {
+      final measMaps = await _sync.getMeasurementsForOrder(_order['id']);
+      final profile = await _loadShopProfile();
+      if (!mounted) return;
       setState(() {
         _measurements = measMaps.map((m) => Measurement.fromMap(m)).toList();
+        _shopProfile = profile;
+        _detailsLoaded = true;
       });
+    } catch (e, st) {
+      // Without this the failure escaped silently and a receipt could be
+      // generated with an empty Measurements section.
+      AppLogger.error('OrderViewScreen', 'load details failed',
+          error: e, stackTrace: st);
+      if (mounted) setState(() => _detailsLoaded = true);
+    }
+  }
+
+  // ==================== WHATSAPP ====================
+
+  /// Re-send the full order confirmation at any time. Previously this message
+  /// only existed in the create-order popup, so skipping it there meant the
+  /// customer could never be sent one.
+  Future<void> _sendConfirmation() => _sendWhatsApp(
+        WhatsAppService().buildOrderConfirmation(
+          order: _order,
+          shopProfile: _shopProfile,
+        ),
+      );
+
+  /// Tell the customer the order is finished and ready to collect.
+  Future<void> _sendReady() => _sendWhatsApp(
+        WhatsAppService().buildOrderReady(
+          order: _order,
+          shopProfile: _shopProfile,
+        ),
+      );
+
+  Future<void> _sendWhatsApp(String message, {String? phoneOverride}) async {
+    final phone =
+        phoneOverride ?? (_order['customer_phone'] ?? '').toString();
+    if (phone.isEmpty) {
+      SnackbarHelper.showInfo(context, 'no_phone_number'.tr());
+      return;
+    }
+    final result =
+        await WhatsAppService().send(phone: phone, message: message);
+    if (!mounted) return;
+    if (result == WhatsAppSendResult.invalidNumber) {
+      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
+    } else if (result == WhatsAppSendResult.launchFailed) {
+      SnackbarHelper.showError(context, 'whatsapp_open_failed'.tr());
     }
   }
 
@@ -105,7 +155,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   String _formatDate(String? isoDate) {
     if (isoDate == null || isoDate.isEmpty) return '-';
     try {
-      final date = DateTime.parse(isoDate);
+      final date = DateTime.parse(isoDate).toLocal();
       return '${date.day.toString().padLeft(2, '0')}/${date.month.toString().padLeft(2, '0')}/${date.year}';
     } catch (_) {
       return isoDate;
@@ -114,6 +164,10 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
 
   String _garmentLabel() {
     final isUrdu = context.locale.languageCode == 'ur';
+    // A tailor-defined category (or a renamed built-in) carries its own name;
+    // its raw stitch_type is an opaque id that must never reach the screen.
+    final snapshot = _order['category_name']?.toString().trim() ?? '';
+    if (snapshot.isNotEmpty) return snapshot;
     switch (_order['stitch_type']) {
       case 'full_suit':
         return isUrdu ? 'مکمل سوٹ' : 'Full Suit';
@@ -154,10 +208,23 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     }
   }
 
+  /// Render an option value the way the receipt does: booleans as Yes/No,
+  /// everything else title-cased. Previously these printed literal
+  /// "true"/"false" and raw snake_case values.
+  String _optionText(Object? v) {
+    if (v is bool) return v ? 'Yes' : 'No';
+    if (v is num && (v == 0 || v == 1)) return v == 1 ? 'Yes' : 'No';
+    return GarmentLabels.titleCase(v?.toString() ?? '');
+  }
+
   List<String> _colorsList() {
     try {
       final decoded = json.decode(_order['colors'] ?? '[]');
-      if (decoded is List) return decoded.cast<String>();
+      // cast<String>() is lazy and would throw later, during build, on any
+      // non-string entry — map eagerly instead.
+      if (decoded is List) {
+        return decoded.map((e) => e.toString()).toList();
+      }
     } catch (_) {}
     final c = _order['colors'] ?? '';
     return c.toString().isEmpty ? [] : [c.toString()];
@@ -174,19 +241,11 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     }
   }
 
-  Future<void> _openWhatsApp(String phone, String message) async {
-    final phoneNumber = PhoneUtils.toWhatsAppFormat(phone);
-    if (phoneNumber == null || phoneNumber.isEmpty) {
-      if (!mounted) return;
-      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
-      return;
-    }
-    final uri = Uri.parse(
-        'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  /// Kept for the share/chat entry points. Routed through WhatsAppService so
+  /// a failure to open WhatsApp reports itself — the old canLaunchUrl guard
+  /// had no else branch, so the button silently did nothing.
+  Future<void> _openWhatsApp(String phone, String message) =>
+      _sendWhatsApp(message, phoneOverride: phone);
 
   String _buildShareMessage() {
     final name = _order['customer_name'] ?? '';
@@ -267,7 +326,14 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     try {
       final dir = await getTemporaryDirectory();
       final serial = _order['customer_serial'] ?? '';
-      final file = File('${dir.path}/order_$serial.pdf');
+      // Include the delivery date and a slice of the order id: every order
+      // for the same customer previously wrote to order_<serial>.pdf, so a
+      // second receipt overwrote the first and could be re-shared by mistake.
+      final ref = (_order['id'] ?? '').toString().replaceAll('-', '');
+      final suffix = ref.length >= 6 ? ref.substring(0, 6) : ref;
+      final datePart =
+          (_order['delivery_date'] ?? '').toString().replaceAll('-', '');
+      final file = File('${dir.path}/order_${serial}_${datePart}_$suffix.pdf');
       await file.writeAsBytes(pdfBytes);
       await SharePlus.instance.share(
         ShareParams(
@@ -283,6 +349,12 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   }
 
   Future<List<int>?> _buildPdfBytes() async {
+    if (!_detailsLoaded) {
+      // Tapping the PDF button the instant the screen opens would otherwise
+      // produce a receipt with no measurements at all.
+      SnackbarHelper.showInfo(context, 'please_wait'.tr());
+      return null;
+    }
     // Show loading
     if (mounted) {
       SnackbarHelper.showInfo(context, 'generating_pdf'.tr());
@@ -295,13 +367,19 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
       // Build grouped measurements — preserve garment-type structure for PDF
       final List<Map<String, dynamic>> groupedMeasurements = [];
       for (final m in _measurements) {
-        if (m.measurements.isEmpty) continue;
         Map<String, dynamic> options = {};
         if (m.additionalOptions != null && m.additionalOptions!.isNotEmpty) {
           try {
             options = Map<String, dynamic>.from(
                 json.decode(m.additionalOptions!) as Map<String, dynamic>);
           } catch (_) {}
+        }
+        // A tailor-defined category can be all switches and choices with no
+        // numeric measurement at all. Skipping on empty measurements alone
+        // would drop that whole group from the worker's copy.
+        if (m.measurements.isEmpty &&
+            GarmentLabels.visibleOptions(options).isEmpty) {
+          continue;
         }
         groupedMeasurements.add({
           'garmentType': m.garmentType,
@@ -325,9 +403,11 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
             int.tryParse(_order['customer_serial']?.toString() ?? '0') ?? 0,
         customerGender: _order['customer_gender'] ?? 'male',
         stitchType: _order['stitch_type'] ?? '',
+        categoryName: _order['category_name']?.toString(),
         shirtSubType: _order['shirt_sub_type'],
         bottomType: _order['bottom_type'],
         bottomWaistband: _order['bottom_waistband'],
+        elasticWidth: _order['elastic_width']?.toString(),
         quantity: int.tryParse(_order['quantity']?.toString() ?? '1') ?? 1,
         colors: _colorsList(),
         orderDate: _formatDate(_order['created_at']),
@@ -393,6 +473,11 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
           // Status section
           _buildStatusSection(status),
           const SizedBox(height: 14),
+
+          // WhatsApp actions — available for the life of the order, so a
+          // confirmation skipped at creation can still be sent later.
+          _buildMessageCard(),
+          const SizedBox(height: 10),
 
           // Customer info
           _buildCard(
@@ -561,6 +646,64 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     );
   }
 
+  Widget _buildMessageCard() {
+    final hasPhone = (_order['customer_phone'] ?? '').toString().isNotEmpty;
+    final rawStatus = (_order['status'] ?? 'pending').toString();
+    // Don't offer to tell a customer their cancelled order was "placed", or
+    // that an already-delivered order is waiting for collection.
+    final canConfirm = hasPhone && rawStatus != 'cancelled';
+    final canAnnounceReady =
+        hasPhone && (rawStatus == 'pending' || rawStatus == 'completed');
+    if (!canConfirm && !canAnnounceReady && hasPhone) {
+      return const SizedBox.shrink();
+    }
+    return _buildCard(
+      title: 'message_customer'.tr(),
+      icon: Icons.chat_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!hasPhone)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'no_phone_number'.tr(),
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: canConfirm ? _sendConfirmation : null,
+            icon: const Icon(Icons.receipt_long, size: 18),
+            label: Text('send_order_confirmation'.tr()),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: canAnnounceReady ? _sendReady : null,
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: Text('send_order_ready'.tr()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusSection(String status) {
     final rawStatus = _order['status'] ?? 'pending';
     return Container(
@@ -651,13 +794,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      final phone = _order['customer_phone'] ?? '';
-                      final name = _order['customer_name'] ?? '';
-                      if (phone.isNotEmpty) {
-                        _openWhatsApp(phone, 'order_pickup_message'.tr(namedArgs: {'name': name}));
-                      }
-                    },
+                    onPressed: _sendReady,
                     icon: const Icon(Icons.chat, size: 18),
                     label: Text('send_pickup_msg'.tr()),
                     style: OutlinedButton.styleFrom(
@@ -838,21 +975,25 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: _measurements.map((m) {
                   final data = m.measurements;
-                  Map<String, dynamic> options = {};
+                  Map<String, dynamic> rawOptions = {};
                   try {
                     if (m.additionalOptions != null &&
                         m.additionalOptions!.isNotEmpty) {
-                      options = json.decode(m.additionalOptions!)
+                      rawOptions = json.decode(m.additionalOptions!)
                           as Map<String, dynamic>;
                     }
                   } catch (_) {}
+                  // Tailor-defined fields are named by the snapshot saved with
+                  // the order, not by the built-in key table.
+                  final labels = GarmentLabels.labelSnapshot(rawOptions);
+                  final options = GarmentLabels.visibleOptions(rawOptions);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Divider(height: 1),
                       const SizedBox(height: 8),
                       Text(
-                        m.garmentType.tr(),
+                        GarmentLabels.groupLabel(m.garmentType, rawOptions),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -876,7 +1017,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          e.key.tr(),
+                                          GarmentLabels.fieldLabel(
+                                              e.key, labels),
                                           style: const TextStyle(
                                             fontSize: 12,
                                             color: AppColors.textSecondary,
@@ -909,7 +1051,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                   padding:
                                       const EdgeInsets.only(bottom: 2),
                                   child: Text(
-                                    '${e.key.tr()}: ${e.value.toString().tr()}',
+                                    '${GarmentLabels.fieldLabel(e.key, labels)}: '
+                                    '${_optionText(e.value)}',
                                     style: const TextStyle(
                                       fontSize: 12,
                                       color: AppColors.textSecondary,

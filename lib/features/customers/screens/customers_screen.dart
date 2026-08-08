@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/customer.dart';
 import 'add_customer_screen.dart';
+import 'customer_profile_screen.dart';
 
 class CustomersScreen extends StatefulWidget {
   const CustomersScreen({super.key});
@@ -35,26 +37,50 @@ class _CustomersScreenState extends State<CustomersScreen> {
   }
 
   Future<void> _loadCustomers() async {
-    final data = await _sync.getAllCustomers();
-    if (mounted) {
+    try {
+      final data = await _sync.getAllCustomers();
+      if (!mounted) return;
       setState(() {
         _customers = data.map((m) => Customer.fromMap(m)).toList();
-        _filteredCustomers = _customers;
         _isLoading = false;
       });
+      // Re-apply any active query, otherwise returning from an edit, add or
+      // delete silently dropped the search and snapped back to the full list.
+      _filterCustomers(_searchController.text);
+    } catch (e, st) {
+      AppLogger.error('CustomersScreen', 'load failed',
+          error: e, stackTrace: st);
+      if (!mounted) return;
+      setState(() {
+        _customers = [];
+        _filteredCustomers = [];
+        _isLoading = false;
+      });
+      SnackbarHelper.showError(context, 'err_generic_friendly'.tr());
     }
   }
 
   void _filterCustomers(String query) {
+    // Match the digits of a phone regardless of how it was typed or stored
+    // ("0300 1234567" should be findable by "03001234567" and vice versa),
+    // and support "#12" serial lookups like the order flow does.
+    final q = query.trim().toLowerCase();
+    final digits = q.replaceAll(RegExp(r'\D'), '');
+    final serialQuery = q.startsWith('#') ? q.substring(1).trim() : null;
     setState(() {
-      if (query.isEmpty) {
+      if (q.isEmpty) {
         _filteredCustomers = _customers;
-      } else {
+      } else if (serialQuery != null) {
         _filteredCustomers = _customers
-            .where((c) =>
-                c.name.toLowerCase().contains(query.toLowerCase()) ||
-                c.phone.contains(query))
+            .where((c) => c.serialNumber.toString() == serialQuery)
             .toList();
+      } else {
+        _filteredCustomers = _customers.where((c) {
+          final phoneDigits = c.phone.replaceAll(RegExp(r'\D'), '');
+          return c.name.toLowerCase().contains(q) ||
+              (digits.isNotEmpty && phoneDigits.contains(digits)) ||
+              c.serialNumber.toString() == q;
+        }).toList();
       }
     });
   }
@@ -64,6 +90,13 @@ class _CustomersScreenState extends State<CustomersScreen> {
       SlidePageRoute(page: const AddCustomerScreen()),
     );
     if (result == true) _loadCustomers();
+  }
+
+  Future<void> _openProfile(Customer customer) async {
+    await Navigator.of(context).push(
+      SlidePageRoute(page: CustomerProfileScreen(customer: customer)),
+    );
+    if (mounted) _loadCustomers();
   }
 
   Future<void> _navigateToEdit(Customer customer) async {
@@ -127,10 +160,14 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                // The global inputDecorationTheme fills this field with a
+                // near-white background, so the text and hint must be dark —
+                // white-on-white made the query invisible while typing.
+                style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 16),
                 decoration: InputDecoration(
                   hintText: 'search_customers'.tr(),
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  hintStyle: const TextStyle(color: AppColors.textHint),
                   border: InputBorder.none,
                 ),
                 onChanged: _filterCustomers,
@@ -292,7 +329,9 @@ class _CustomersScreenState extends State<CustomersScreen> {
                 ),
               ],
             ),
-            onTap: () => _navigateToEdit(customer),
+            // Tapping a customer shows their profile (measurements + order
+            // history); editing stays available in the ⋮ menu.
+            onTap: () => _openProfile(customer),
           ),
         );
       },
