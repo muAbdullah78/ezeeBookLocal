@@ -3,7 +3,20 @@ import 'dart:typed_data';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import 'garment_labels.dart';
+
 class PdfGenerator {
+  /// SQLite has no boolean type, so flags round-trip as `1`/`0` (and cloud
+  /// backups may carry real bools or strings). Comparing such a value with
+  /// `== true` silently fails, which previously hid the whole dupatta section
+  /// from every receipt. Normalise all of those spellings here.
+  static bool _isTrue(Object? v) {
+    if (v is bool) return v;
+    if (v is num) return v != 0;
+    final s = v?.toString().trim().toLowerCase();
+    return s == 'true' || s == '1' || s == 'yes';
+  }
+
   static const _teal = PdfColor.fromInt(0xFF26A69A);
   static const _tealDark = PdfColor.fromInt(0xFF00897B);
   static const _lightGrey = PdfColor.fromInt(0xFFE0E0E0);
@@ -23,6 +36,7 @@ class PdfGenerator {
     String? shirtSubType,
     String? bottomType,
     String? bottomWaistband,
+    String? elasticWidth,
     required int quantity,
     required List<String> colors,
     required String orderDate,
@@ -63,7 +77,11 @@ class PdfGenerator {
       if (bottomType != null && bottomType.isNotEmpty)
         _subTypeLabel(bottomType),
       if (bottomWaistband != null && bottomWaistband.isNotEmpty)
-        bottomWaistband,
+        GarmentLabels.titleCase(bottomWaistband),
+      // Elastic/belt width is captured during measurement but never used to
+      // reach the worker's copy — without it the waistband cannot be sewn.
+      if (elasticWidth != null && elasticWidth.isNotEmpty)
+        '${GarmentLabels.titleCase(elasticWidth)}"',
     ].join(' | ');
     final colorsStr = colors.isEmpty ? '-' : colors.join(', ');
 
@@ -209,28 +227,33 @@ class PdfGenerator {
 
           // ── DUPATTA DETAILS ──
           if (dupattaDetails != null &&
-              dupattaDetails['included'] == true) ...[
+              _isTrue(dupattaDetails['included'])) ...[
             _sectionHeader('Dupatta Details', headerStyle),
             pw.SizedBox(height: 6),
-            if (dupattaDetails['finishing'] != null)
-              _keyValue('Finishing', dupattaDetails['finishing'].toString(),
+            if ((dupattaDetails['finishing']?.toString() ?? '').isNotEmpty)
+              _keyValue('Finishing',
+                  _formatFinishing(dupattaDetails['finishing'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['pico_type'] != null)
-              _keyValue('Pico Type', dupattaDetails['pico_type'].toString(),
+              _keyValue('Pico Type',
+                  GarmentLabels.titleCase(dupattaDetails['pico_type'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['pico_coverage'] != null)
               _keyValue('Pico Coverage',
-                  dupattaDetails['pico_coverage'].toString(),
+                  GarmentLabels.titleCase(
+                      dupattaDetails['pico_coverage'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['piping_coverage'] != null)
               _keyValue('Piping Coverage',
-                  dupattaDetails['piping_coverage'].toString(),
+                  GarmentLabels.titleCase(
+                      dupattaDetails['piping_coverage'].toString()),
                   boldStyle, normalStyle),
             if (dupattaDetails['lace_coverage'] != null)
               _keyValue('Lace Coverage',
-                  dupattaDetails['lace_coverage'].toString(),
+                  GarmentLabels.titleCase(
+                      dupattaDetails['lace_coverage'].toString()),
                   boldStyle, normalStyle),
-            if (dupattaDetails['lace_provided_by_customer'] == true)
+            if (_isTrue(dupattaDetails['lace_provided_by_customer']))
               pw.Text('Lace provided by customer', style: normalStyle),
             pw.SizedBox(height: 14),
           ],
@@ -576,9 +599,25 @@ class PdfGenerator {
         .join(' ');
   }
 
+  /// Dupatta finishing is stored as a comma-joined list ("pico,lace").
+  /// Render it as "Pico, Lace" rather than dumping the raw string.
+  static String _formatFinishing(String raw) {
+    return raw
+        .split(',')
+        .map((s) => s.trim())
+        .where((s) => s.isNotEmpty)
+        .map(GarmentLabels.titleCase)
+        .join(', ');
+  }
+
   static String _formatOptionValue(dynamic value) {
     if (value == null) return '';
     if (value is bool) return value ? 'Yes' : 'No';
+    // Toggles saved through SQLite arrive as 1/0 — render them as Yes/No so
+    // the worker sees "Front Pocket: Yes" instead of "Front Pocket: 1".
+    if (value is num && (value == 0 || value == 1)) {
+      return value == 1 ? 'Yes' : 'No';
+    }
     final s = value.toString();
     if (s.contains('_')) {
       return s

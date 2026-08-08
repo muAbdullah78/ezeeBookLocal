@@ -328,6 +328,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
         shirtSubType: _order['shirt_sub_type'],
         bottomType: _order['bottom_type'],
         bottomWaistband: _order['bottom_waistband'],
+        elasticWidth: _order['elastic_width']?.toString(),
         quantity: int.tryParse(_order['quantity']?.toString() ?? '1') ?? 1,
         colors: _colorsList(),
         orderDate: _formatDate(_order['created_at']),

@@ -127,10 +127,14 @@ class _CustomersScreenState extends State<CustomersScreen> {
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
-                style: const TextStyle(color: Colors.white, fontSize: 16),
+                // The global inputDecorationTheme fills this field with a
+                // near-white background, so the text and hint must be dark —
+                // white-on-white made the query invisible while typing.
+                style: const TextStyle(
+                    color: AppColors.textPrimary, fontSize: 16),
                 decoration: InputDecoration(
                   hintText: 'search_customers'.tr(),
-                  hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+                  hintStyle: const TextStyle(color: AppColors.textHint),
                   border: InputBorder.none,
                 ),
                 onChanged: _filterCustomers,

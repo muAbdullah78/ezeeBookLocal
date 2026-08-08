@@ -273,6 +273,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       body: Column(
         children: [
+          // Breathing room so the chips don't sit flush against the app bar.
+          const SizedBox(height: 16),
           // Filter tabs
           SizedBox(
             height: 44,
