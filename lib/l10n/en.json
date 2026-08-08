@@ -508,5 +508,7 @@
   "last_updated": "Updated",
   "continue_to_order": "Continue to Order",
   "order_status_cancelled": "Cancelled",
-  "please_wait": "Loading order details, please wait..."
+  "please_wait": "Loading order details, please wait...",
+  "send_ready_prompt": "Order marked done. Send the customer a \"your order is ready\" message on WhatsApp?",
+  "send": "Send"
 }

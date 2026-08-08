@@ -7,13 +7,11 @@ import 'package:easy_localization/easy_localization.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus, XFile;
-import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/pdf_generator.dart';
-import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/measurement.dart';
 import '../../../services/error_reporter.dart';
@@ -82,8 +80,9 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
         ),
       );
 
-  Future<void> _sendWhatsApp(String message) async {
-    final phone = (_order['customer_phone'] ?? '').toString();
+  Future<void> _sendWhatsApp(String message, {String? phoneOverride}) async {
+    final phone =
+        phoneOverride ?? (_order['customer_phone'] ?? '').toString();
     if (phone.isEmpty) {
       SnackbarHelper.showInfo(context, 'no_phone_number'.tr());
       return;
@@ -224,19 +223,11 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     }
   }
 
-  Future<void> _openWhatsApp(String phone, String message) async {
-    final phoneNumber = PhoneUtils.toWhatsAppFormat(phone);
-    if (phoneNumber == null || phoneNumber.isEmpty) {
-      if (!mounted) return;
-      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
-      return;
-    }
-    final uri = Uri.parse(
-        'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message)}');
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    }
-  }
+  /// Kept for the share/chat entry points. Routed through WhatsAppService so
+  /// a failure to open WhatsApp reports itself — the old canLaunchUrl guard
+  /// had no else branch, so the button silently did nothing.
+  Future<void> _openWhatsApp(String phone, String message) =>
+      _sendWhatsApp(message, phoneOverride: phone);
 
   String _buildShareMessage() {
     final name = _order['customer_name'] ?? '';
@@ -632,6 +623,15 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
 
   Widget _buildMessageCard() {
     final hasPhone = (_order['customer_phone'] ?? '').toString().isNotEmpty;
+    final rawStatus = (_order['status'] ?? 'pending').toString();
+    // Don't offer to tell a customer their cancelled order was "placed", or
+    // that an already-delivered order is waiting for collection.
+    final canConfirm = hasPhone && rawStatus != 'cancelled';
+    final canAnnounceReady =
+        hasPhone && (rawStatus == 'pending' || rawStatus == 'completed');
+    if (!canConfirm && !canAnnounceReady && hasPhone) {
+      return const SizedBox.shrink();
+    }
     return _buildCard(
       title: 'message_customer'.tr(),
       icon: Icons.chat_outlined,
@@ -648,7 +648,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
               ),
             ),
           OutlinedButton.icon(
-            onPressed: hasPhone ? _sendConfirmation : null,
+            onPressed: canConfirm ? _sendConfirmation : null,
             icon: const Icon(Icons.receipt_long, size: 18),
             label: Text('send_order_confirmation'.tr()),
             style: OutlinedButton.styleFrom(
@@ -662,7 +662,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
           ),
           const SizedBox(height: 8),
           ElevatedButton.icon(
-            onPressed: hasPhone ? _sendReady : null,
+            onPressed: canAnnounceReady ? _sendReady : null,
             icon: const Icon(Icons.check_circle_outline, size: 18),
             label: Text('send_order_ready'.tr()),
             style: ElevatedButton.styleFrom(

@@ -284,6 +284,13 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   Future<void> _confirmOrder() async {
     if (!_validate()) return;
+    // The success dialog can be dismissed with the Android back button, which
+    // returns to a live Confirm button. Without this guard a second tap wrote
+    // a duplicate order, duplicate measurements and a duplicate dupatta row.
+    if (_savedOrder != null) {
+      _showSuccessDialog();
+      return;
+    }
     setState(() => _isSaving = true);
 
     try {
@@ -381,7 +388,9 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => PopScope(
+        canPop: false,
+        child: AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         contentPadding: const EdgeInsets.fromLTRB(24, 24, 24, 16),
         content: Column(
@@ -477,6 +486,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

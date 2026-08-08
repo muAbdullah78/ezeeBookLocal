@@ -49,7 +49,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  Future<void> _confirmMarkCompleted(String orderId) async {
+  Future<void> _confirmMarkCompleted(Map<String, dynamic> order) async {
+    final orderId = order['id'] as String;
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -76,7 +77,38 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (confirmed != true) return;
 
     await _sync.updateOrderStatus(orderId, 'completed');
+    if (!mounted) return;
     _loadStats();
+
+    // The row leaves Today's Deliveries the moment it is completed, so this is
+    // the last chance to offer the "your order is ready" message from here.
+    final phone = (order['customer_phone'] ?? '').toString();
+    if (phone.isEmpty) return;
+    final send = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text('send_order_ready'.tr()),
+        content: Text('send_ready_prompt'.tr()),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('not_now'.tr()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+            ),
+            child: Text('send'.tr()),
+          ),
+        ],
+      ),
+    );
+    if (send == true && mounted) {
+      await _sendReadyMessage({...order, 'status': 'completed'});
+    }
   }
 
   /// Send the "your order is ready" WhatsApp message straight from the
@@ -567,21 +599,11 @@ Widget _buildQuickActions(BuildContext context) {
                     ],
                   ),
                 ),
-                const SizedBox(width: 4),
-                // Tell the customer their order is ready without having to
-                // open the order first.
-                if ((order['customer_phone'] ?? '').toString().isNotEmpty)
-                  IconButton(
-                    icon: const Icon(Icons.chat,
-                        color: AppColors.success, size: 22),
-                    tooltip: 'send_order_ready'.tr(),
-                    visualDensity: VisualDensity.compact,
-                    onPressed: () => _sendReadyMessage(order),
-                  ),
+                const SizedBox(width: 8),
                 SizedBox(
                   height: 34,
                   child: ElevatedButton(
-                    onPressed: () => _confirmMarkCompleted(order['id']),
+                    onPressed: () => _confirmMarkCompleted(order),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.success,
                       foregroundColor: Colors.white,
