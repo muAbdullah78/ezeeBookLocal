@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/page_transitions.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/widgets/shimmer_loading.dart';
 import '../../customers/screens/add_customer_screen.dart';
 import '../../orders/screens/order_view_screen.dart';
@@ -75,6 +77,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
     await _sync.updateOrderStatus(orderId, 'completed');
     _loadStats();
+  }
+
+  /// Send the "your order is ready" WhatsApp message straight from the
+  /// dashboard, so the tailor can notify a customer without opening the order.
+  Future<void> _sendReadyMessage(Map<String, dynamic> order) async {
+    final phone = (order['customer_phone'] ?? '').toString();
+    if (phone.isEmpty) {
+      SnackbarHelper.showInfo(context, 'no_phone_number'.tr());
+      return;
+    }
+    final profile = await _sync.getShopProfile();
+    final message = WhatsAppService().buildOrderReady(
+      order: order,
+      shopProfile: profile,
+    );
+    final result = await WhatsAppService().send(phone: phone, message: message);
+    if (!mounted) return;
+    if (result == WhatsAppSendResult.invalidNumber) {
+      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
+    } else if (result == WhatsAppSendResult.launchFailed) {
+      SnackbarHelper.showError(context, 'whatsapp_open_failed'.tr());
+    }
   }
 
   Future<void> _navigateToAddCustomer() async {
@@ -543,7 +567,17 @@ Widget _buildQuickActions(BuildContext context) {
                     ],
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
+                // Tell the customer their order is ready without having to
+                // open the order first.
+                if ((order['customer_phone'] ?? '').toString().isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.chat,
+                        color: AppColors.success, size: 22),
+                    tooltip: 'send_order_ready'.tr(),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () => _sendReadyMessage(order),
+                  ),
                 SizedBox(
                   height: 34,
                   child: ElevatedButton(

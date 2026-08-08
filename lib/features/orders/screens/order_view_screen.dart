@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart' show ShareParams, SharePlus, XFile;
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/pdf_generator.dart';
 import '../../../core/utils/phone_utils.dart';
@@ -30,6 +31,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
   final _sync = SyncService();
   late Map<String, dynamic> _order;
   List<Measurement> _measurements = [];
+  Map<String, dynamic>? _shopProfile;
   bool _measurementsExpanded = false;
 
   @override
@@ -41,10 +43,48 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
 
   Future<void> _loadDetails() async {
     final measMaps = await _sync.getMeasurementsForOrder(_order['id']);
+    final profile = await _loadShopProfile();
     if (mounted) {
       setState(() {
         _measurements = measMaps.map((m) => Measurement.fromMap(m)).toList();
+        _shopProfile = profile;
       });
+    }
+  }
+
+  // ==================== WHATSAPP ====================
+
+  /// Re-send the full order confirmation at any time. Previously this message
+  /// only existed in the create-order popup, so skipping it there meant the
+  /// customer could never be sent one.
+  Future<void> _sendConfirmation() => _sendWhatsApp(
+        WhatsAppService().buildOrderConfirmation(
+          order: _order,
+          shopProfile: _shopProfile,
+        ),
+      );
+
+  /// Tell the customer the order is finished and ready to collect.
+  Future<void> _sendReady() => _sendWhatsApp(
+        WhatsAppService().buildOrderReady(
+          order: _order,
+          shopProfile: _shopProfile,
+        ),
+      );
+
+  Future<void> _sendWhatsApp(String message) async {
+    final phone = (_order['customer_phone'] ?? '').toString();
+    if (phone.isEmpty) {
+      SnackbarHelper.showInfo(context, 'no_phone_number'.tr());
+      return;
+    }
+    final result =
+        await WhatsAppService().send(phone: phone, message: message);
+    if (!mounted) return;
+    if (result == WhatsAppSendResult.invalidNumber) {
+      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
+    } else if (result == WhatsAppSendResult.launchFailed) {
+      SnackbarHelper.showError(context, 'whatsapp_open_failed'.tr());
     }
   }
 
@@ -395,6 +435,11 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
           _buildStatusSection(status),
           const SizedBox(height: 14),
 
+          // WhatsApp actions — available for the life of the order, so a
+          // confirmation skipped at creation can still be sent later.
+          _buildMessageCard(),
+          const SizedBox(height: 10),
+
           // Customer info
           _buildCard(
             title: 'customer_info'.tr(),
@@ -562,6 +607,55 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
     );
   }
 
+  Widget _buildMessageCard() {
+    final hasPhone = (_order['customer_phone'] ?? '').toString().isNotEmpty;
+    return _buildCard(
+      title: 'message_customer'.tr(),
+      icon: Icons.chat_outlined,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (!hasPhone)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                'no_phone_number'.tr(),
+                style: const TextStyle(
+                    fontSize: 13, color: AppColors.textSecondary),
+              ),
+            ),
+          OutlinedButton.icon(
+            onPressed: hasPhone ? _sendConfirmation : null,
+            icon: const Icon(Icons.receipt_long, size: 18),
+            label: Text('send_order_confirmation'.tr()),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: AppColors.primary,
+              side: const BorderSide(color: AppColors.primary),
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ElevatedButton.icon(
+            onPressed: hasPhone ? _sendReady : null,
+            icon: const Icon(Icons.check_circle_outline, size: 18),
+            label: Text('send_order_ready'.tr()),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.success,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildStatusSection(String status) {
     final rawStatus = _order['status'] ?? 'pending';
     return Container(
@@ -652,13 +746,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: () {
-                      final phone = _order['customer_phone'] ?? '';
-                      final name = _order['customer_name'] ?? '';
-                      if (phone.isNotEmpty) {
-                        _openWhatsApp(phone, 'order_pickup_message'.tr(namedArgs: {'name': name}));
-                      }
-                    },
+                    onPressed: _sendReady,
                     icon: const Icon(Icons.chat, size: 18),
                     label: Text('send_pickup_msg'.tr()),
                     style: OutlinedButton.styleFrom(

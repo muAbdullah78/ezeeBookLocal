@@ -348,7 +348,9 @@ class DatabaseHelper {
     final db = await database;
     final today = DateTime.now().toIso8601String().substring(0, 10);
     return await db.rawQuery('''
-      SELECT orders.*, customers.name as customer_name
+      SELECT orders.*, customers.name as customer_name,
+             customers.phone as customer_phone,
+             customers.serial_number as customer_serial
       FROM orders
       INNER JOIN customers ON orders.customer_id = customers.id
       WHERE orders.delivery_date = ? AND orders.status = 'pending'
@@ -360,7 +362,9 @@ class DatabaseHelper {
     final db = await database;
     final today = DateTime.now().toIso8601String().substring(0, 10);
     return await db.rawQuery('''
-      SELECT orders.*, customers.name as customer_name
+      SELECT orders.*, customers.name as customer_name,
+             customers.phone as customer_phone,
+             customers.serial_number as customer_serial
       FROM orders
       INNER JOIN customers ON orders.customer_id = customers.id
       WHERE orders.status = 'pending' AND orders.delivery_date < ?
@@ -372,7 +376,9 @@ class DatabaseHelper {
     final db = await database;
     final today = DateTime.now().toIso8601String().substring(0, 10);
     return await db.rawQuery('''
-      SELECT orders.*, customers.name as customer_name
+      SELECT orders.*, customers.name as customer_name,
+             customers.phone as customer_phone,
+             customers.serial_number as customer_serial
       FROM orders
       INNER JOIN customers ON orders.customer_id = customers.id
       WHERE orders.status = 'completed' AND orders.delivery_date < ?

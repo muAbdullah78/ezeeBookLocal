@@ -495,5 +495,9 @@
   "restore_replace": "Replace",
   "restore_success": "Data restored successfully.",
   "restore_failed": "Could not restore. The file may be damaged.",
-  "restore_invalid_file": "This is not a valid EzeeBook backup file."
+  "restore_invalid_file": "This is not a valid EzeeBook backup file.",
+  "message_customer": "Message Customer",
+  "send_order_confirmation": "Send Order Confirmation",
+  "send_order_ready": "Send \"Order Ready\" Message",
+  "whatsapp_open_failed": "Could not open WhatsApp. Is it installed?"
 }

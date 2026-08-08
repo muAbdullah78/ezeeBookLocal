@@ -4,15 +4,14 @@ import 'dart:io' show Platform;
 import 'package:easy_localization/easy_localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/page_transitions.dart';
-import '../../../core/utils/phone_utils.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../dashboard/screens/main_shell.dart';
 import '../widgets/extra_instructions_widget.dart';
@@ -73,6 +72,10 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
 
   String _shopName = '';
   String _shopPhone = '';
+
+  /// The order row as saved, kept so the confirmation message can be built
+  /// from the same data the rest of the app will read back later.
+  Map<String, dynamic>? _savedOrder;
 
   static const _presetColors = [
     {'name': 'Red', 'urdu': 'سرخ', 'color': Colors.red},
@@ -249,31 +252,6 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     }
   }
 
-  String _garmentLabelForWhatsApp() {
-    String label;
-    switch (widget.stitchType) {
-      case 'full_suit':
-        label = 'Full Suit';
-        break;
-      case 'naap_suit':
-        label = 'Naap Suit';
-        break;
-      case 'only_shirt':
-        label = 'Only Shirt';
-        break;
-      case 'only_shalwar_trouser':
-        label = 'Only Shalwar/Trouser';
-        break;
-      default:
-        label = widget.stitchType;
-    }
-    final parts = <String>[];
-    if (widget.shirtSubType != null) parts.add(_subTypeLabel(widget.shirtSubType!));
-    if (widget.bottomType != null) parts.add(_subTypeLabel(widget.bottomType!));
-    if (parts.isNotEmpty) label += ' — ${parts.join(' + ')}';
-    return label;
-  }
-
   // ==================== VALIDATION & SAVE ====================
 
   bool _validate() {
@@ -338,6 +316,7 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
       };
 
       await _sync.saveOrder(order);
+      _savedOrder = order;
 
       // Save shirt measurements
       if (widget.shirtMeasurementData.isNotEmpty) {
@@ -502,49 +481,37 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     );
   }
 
+  /// Send the confirmation for the order that was just saved.
+  ///
+  /// The message is built by [WhatsAppService] from the stored order row —
+  /// the same code path the order screen uses to re-send it later — so the
+  /// customer never receives two differently-worded confirmations.
   Future<void> _sendWhatsApp() async {
-    final colors = _colorControllers.map((c) => c.text.trim()).join(', ');
-    final today = _formatDate(DateTime.now());
-    final delivery = _deliveryDate != null ? _formatDate(_deliveryDate!) : '';
-
-    final message = '''
-🧵 EzeeBook — Order Confirmation 🧵
-━━━━━━━━━━━━━━━━━━━━━
-Assalam o Alaikum! ✨
-Your order has been placed successfully.
-آپ کا آرڈر کامیابی سے درج ہو گیا ہے۔
-
-👤 Customer: ${widget.customerName} (#${widget.customerSerialNumber})
-👔 Garment: ${_garmentLabelForWhatsApp()}
-🔢 Quantity: $_quantity suit(s)
-🎨 Colors: $colors
-📅 Order Date: $today
-📅 Delivery Date: $delivery
-
-Thank you for choosing us!
-ہم پر اعتماد کرنے کا شکریہ! 🤲
-━━━━━━━━━━━━━━━━━━━━━
-✂️ $_shopName
-📞 $_shopPhone''';
-
-    final phoneNumber = PhoneUtils.toWhatsAppFormat(widget.customerPhone);
-    if (phoneNumber == null || phoneNumber.isEmpty) {
-      if (mounted) {
-        SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
-        _navigateToDashboard();
-      }
+    final order = _savedOrder;
+    if (order == null) {
+      _navigateToDashboard();
       return;
     }
 
-    final uri = Uri.parse(
-      'https://wa.me/$phoneNumber?text=${Uri.encodeComponent(message.trim())}',
+    final message = WhatsAppService().buildOrderConfirmation(
+      order: order,
+      shopProfile: {'shop_name': _shopName, 'phone': _shopPhone},
+      customerName: widget.customerName,
+      customerSerial: widget.customerSerialNumber,
     );
 
-    try {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } catch (_) {}
+    final result = await WhatsAppService().send(
+      phone: widget.customerPhone,
+      message: message,
+    );
 
-    if (mounted) _navigateToDashboard();
+    if (!mounted) return;
+    if (result == WhatsAppSendResult.invalidNumber) {
+      SnackbarHelper.showError(context, 'whatsapp_invalid_number'.tr());
+    } else if (result == WhatsAppSendResult.launchFailed) {
+      SnackbarHelper.showError(context, 'whatsapp_open_failed'.tr());
+    }
+    _navigateToDashboard();
   }
 
   void _navigateToDashboard() {

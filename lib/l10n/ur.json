@@ -495,5 +495,9 @@
   "restore_replace": "بدلیں",
   "restore_success": "ڈیٹا کامیابی سے بحال ہو گیا۔",
   "restore_failed": "بحال نہیں ہو سکا۔ فائل خراب ہو سکتی ہے۔",
-  "restore_invalid_file": "یہ درست ایزی بک بیک اپ فائل نہیں ہے۔"
+  "restore_invalid_file": "یہ درست ایزی بک بیک اپ فائل نہیں ہے۔",
+  "message_customer": "گاہک کو پیغام بھیجیں",
+  "send_order_confirmation": "آرڈر کی تصدیق بھیجیں",
+  "send_order_ready": "”آرڈر تیار ہے“ پیغام بھیجیں",
+  "whatsapp_open_failed": "واٹس ایپ نہیں کھل سکا۔ کیا یہ انسٹال ہے؟"
 }
