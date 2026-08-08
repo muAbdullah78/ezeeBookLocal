@@ -183,21 +183,28 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String _garmentLabel(Map<String, dynamic> order) {
     final isUrdu = context.locale.languageCode == 'ur';
     String label;
-    switch (order['stitch_type']) {
-      case 'full_suit':
-        label = isUrdu ? 'مکمل سوٹ' : 'Full Suit';
-        break;
-      case 'naap_suit':
-        label = isUrdu ? 'ناپ سوٹ' : 'Naap Suit';
-        break;
-      case 'only_shirt':
-        label = isUrdu ? 'صرف قمیض' : 'Only Shirt';
-        break;
-      case 'only_shalwar_trouser':
-        label = isUrdu ? 'صرف شلوار/ٹراؤزر' : 'Only Shalwar/Trouser';
-        break;
-      default:
-        label = order['stitch_type'] ?? '';
+    // A tailor-defined category (or a renamed built-in) carries its own name;
+    // its raw stitch_type is an opaque id that must never reach the screen.
+    final snapshot = order['category_name']?.toString().trim() ?? '';
+    if (snapshot.isNotEmpty) {
+      label = snapshot;
+    } else {
+      switch (order['stitch_type']) {
+        case 'full_suit':
+          label = isUrdu ? 'مکمل سوٹ' : 'Full Suit';
+          break;
+        case 'naap_suit':
+          label = isUrdu ? 'ناپ سوٹ' : 'Naap Suit';
+          break;
+        case 'only_shirt':
+          label = isUrdu ? 'صرف قمیض' : 'Only Shirt';
+          break;
+        case 'only_shalwar_trouser':
+          label = isUrdu ? 'صرف شلوار/ٹراؤزر' : 'Only Shalwar/Trouser';
+          break;
+        default:
+          label = order['stitch_type'] ?? '';
+      }
     }
     final parts = <String>[];
     if (order['shirt_sub_type'] != null) parts.add(_subTypeLabel(order['shirt_sub_type'], isUrdu));

@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/measurement_keys.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/services/whatsapp_service.dart';
 import '../../../core/utils/app_logger.dart';
@@ -23,6 +24,14 @@ class OrderDetailsScreen extends StatefulWidget {
   final String customerGender;
   final int customerSerialNumber;
   final String stitchType;
+
+  /// The catalogue entry the order was placed from, and a snapshot of its name.
+  ///
+  /// The snapshot is deliberate: renaming or deleting a category later must not
+  /// rewrite what a receipt already handed to a worker said.
+  final String? categoryId;
+  final String? categoryName;
+
   final String? shirtSubType;
   final String? bottomType;
   final String? bottomWaistband;
@@ -31,6 +40,12 @@ class OrderDetailsScreen extends StatefulWidget {
   final Map<String, dynamic> shirtAdditionalOptions;
   final Map<String, dynamic> bottomMeasurementData;
   final Map<String, dynamic> bottomAdditionalOptions;
+
+  /// Values from a tailor-defined category: the whole form for a custom
+  /// category, or the extra fields added on top of a built-in one.
+  final Map<String, dynamic> customMeasurementData;
+  final Map<String, dynamic> customAdditionalOptions;
+
   final Map<String, dynamic>? dupattaDetails;
   final List<Map<String, dynamic>> extraInstructions;
 
@@ -42,6 +57,8 @@ class OrderDetailsScreen extends StatefulWidget {
     required this.customerGender,
     required this.customerSerialNumber,
     required this.stitchType,
+    this.categoryId,
+    this.categoryName,
     this.shirtSubType,
     this.bottomType,
     this.bottomWaistband,
@@ -50,6 +67,8 @@ class OrderDetailsScreen extends StatefulWidget {
     required this.shirtAdditionalOptions,
     required this.bottomMeasurementData,
     required this.bottomAdditionalOptions,
+    this.customMeasurementData = const {},
+    this.customAdditionalOptions = const {},
     this.dupattaDetails,
     required this.extraInstructions,
   });
@@ -196,6 +215,18 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
     final isUrdu = context.locale.languageCode == 'ur';
     String label;
 
+    // A tailor-defined category (or a renamed built-in) carries its own name.
+    final custom = widget.categoryName?.trim() ?? '';
+    if (custom.isNotEmpty) {
+      label = custom;
+      final customParts = <String>[
+        if (widget.shirtSubType != null) _subTypeLabel(widget.shirtSubType!),
+        if (widget.bottomType != null) _subTypeLabel(widget.bottomType!),
+      ];
+      if (customParts.isNotEmpty) label += ' — ${customParts.join(' + ')}';
+      return label;
+    }
+
     switch (widget.stitchType) {
       case 'full_suit':
         label = isUrdu ? 'مکمل سوٹ' : 'Full Suit';
@@ -303,6 +334,8 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
         'id': orderId,
         'customer_id': widget.customerId,
         'stitch_type': widget.stitchType,
+        'category_id': widget.categoryId,
+        'category_name': widget.categoryName,
         'customer_gender': widget.customerGender,
         'shirt_sub_type': widget.shirtSubType,
         'bottom_type': widget.bottomType,
@@ -348,6 +381,24 @@ class _OrderDetailsScreenState extends State<OrderDetailsScreen> {
           'garment_type': 'shalwar_trouser',
           'measurement_data': json.encode(widget.bottomMeasurementData),
           'additional_options': json.encode(widget.bottomAdditionalOptions),
+          'created_at': now,
+          'updated_at': now,
+        });
+      }
+
+      // Save the tailor-defined fields (a whole custom category, or the extras
+      // added to a built-in one) as their own group.
+      final categoryId = widget.categoryId;
+      if (categoryId != null &&
+          (widget.customMeasurementData.isNotEmpty ||
+              widget.customAdditionalOptions.isNotEmpty)) {
+        await _sync.saveMeasurement({
+          'id': const Uuid().v4(),
+          'customer_id': widget.customerId,
+          'order_id': orderId,
+          'garment_type': categoryGarmentType(categoryId),
+          'measurement_data': json.encode(widget.customMeasurementData),
+          'additional_options': json.encode(widget.customAdditionalOptions),
           'created_at': now,
           'updated_at': now,
         });

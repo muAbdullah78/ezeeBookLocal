@@ -257,7 +257,11 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     final values = m.measurements.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
         .toList();
-    final options = _decodeOptions(m.additionalOptions);
+    final rawOptions = _decodeOptions(m.additionalOptions);
+    // Tailor-defined fields are named by the snapshot saved with the order; the
+    // reserved bookkeeping entries must not be listed as instructions.
+    final labels = GarmentLabels.labelSnapshot(rawOptions);
+    final options = GarmentLabels.visibleOptions(rawOptions);
 
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
@@ -281,7 +285,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          GarmentLabels.titleCase(m.garmentType),
+                          GarmentLabels.groupLabel(m.garmentType, rawOptions),
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -324,7 +328,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      GarmentLabels.titleCase(e.key),
+                                      GarmentLabels.fieldLabel(e.key, labels),
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: AppColors.textSecondary,
@@ -351,7 +355,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                     ...options.entries.map((e) => Padding(
                           padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
-                            '${GarmentLabels.titleCase(e.key)}: '
+                            '${GarmentLabels.fieldLabel(e.key, labels)}: '
                             '${_optionValue(e.value)}',
                             style: const TextStyle(
                                 fontSize: 12, color: AppColors.textSecondary),
@@ -392,6 +396,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     final status = (order['status'] ?? 'pending').toString();
     final garment = GarmentLabels.describe(
       stitchTypeValue: order['stitch_type']?.toString(),
+      categoryName: order['category_name']?.toString(),
       shirtSubType: order['shirt_sub_type']?.toString(),
       bottomType: order['bottom_type']?.toString(),
     );

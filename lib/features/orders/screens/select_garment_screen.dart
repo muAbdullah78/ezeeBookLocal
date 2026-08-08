@@ -1,13 +1,27 @@
 import 'package:flutter/material.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/constants/category_icons.dart';
+import '../../../core/constants/measurement_keys.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/services/category_service.dart';
+import '../../../core/utils/app_logger.dart';
+import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/garment_labels.dart';
 import '../../../core/utils/page_transitions.dart';
+import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/customer.dart';
 import '../../../models/measurement.dart';
+import '../../../models/stitch_category.dart';
+import 'custom_measurement_screen.dart';
 import 'measurement_screen.dart';
 
+/// "What to stitch?" — the tailor's own category catalogue.
+///
+/// The list used to be hard-coded, which capped every shop at the same four
+/// options (plus two permanently disabled "coming soon" cards). It now comes
+/// from `stitch_categories`, so a tailor sees exactly the categories they
+/// created, in the order they arranged, filtered to this customer's gender.
 class SelectGarmentScreen extends StatefulWidget {
   final Customer customer;
 
@@ -19,75 +33,37 @@ class SelectGarmentScreen extends StatefulWidget {
 
 class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
   final _sync = SyncService();
+  final _categories = CategoryService();
 
-  List<_GarmentOption> get _garmentOptions {
-    final base = [
-      const _GarmentOption(
-        stitchType: 'full_suit',
-        titleKey: 'full_suit',
-        urduName: 'مکمل سوٹ',
-        icon: Icons.checkroom,
-        circleColor: Color(0xFFE3F2FD),
-        iconColor: Color(0xFF1E88E5),
-        enabled: true,
-      ),
-      const _GarmentOption(
-        stitchType: 'only_shirt',
-        titleKey: 'only_shirt',
-        urduName: 'صرف قمیض',
-        icon: Icons.checkroom,
-        circleColor: Color(0xFFE8F5E9),
-        iconColor: Color(0xFF43A047),
-        enabled: true,
-      ),
-      const _GarmentOption(
-        stitchType: 'only_shalwar_trouser',
-        titleKey: 'only_shalwar_trouser',
-        urduName: 'صرف شلوار/ٹراؤزر',
-        icon: Icons.straighten,
-        circleColor: Color(0xFFFFF3E0),
-        iconColor: Color(0xFFF57C00),
-        enabled: true,
-      ),
-      const _GarmentOption(
-        stitchType: 'naap_suit',
-        titleKey: 'naap_suit',
-        urduName: 'ناپ سوٹ',
-        icon: Icons.square_foot,
-        circleColor: Color(0xFFF3E5F5),
-        iconColor: Color(0xFF8E24AA),
-        enabled: true,
-      ),
-    ];
+  List<StitchCategory> _options = [];
+  bool _loading = true;
 
-    if (widget.customer.gender == 'female') {
-      base.addAll(const [
-        _GarmentOption(
-          stitchType: 'one_piece_suit',
-          titleKey: 'one_piece_suit',
-          urduName: 'ون پیس سوٹ',
-          icon: Icons.style,
-          circleColor: Color(0xFFFCE4EC),
-          iconColor: Color(0xFFE91E63),
-          enabled: false,
-        ),
-        _GarmentOption(
-          stitchType: 'saari_blouse',
-          titleKey: 'saari_blouse',
-          urduName: 'ساڑھی/بلاؤز',
-          icon: Icons.auto_awesome,
-          circleColor: Color(0xFFE0F2F1),
-          iconColor: Color(0xFF26A69A),
-          enabled: false,
-        ),
-      ]);
-    }
-
-    return base;
+  @override
+  void initState() {
+    super.initState();
+    _load();
   }
 
-  List<String> _garmentTypesForStitch(String stitchType) {
-    switch (stitchType) {
+  Future<void> _load() async {
+    try {
+      final list = await _categories.getForCustomer(widget.customer.gender);
+      if (!mounted) return;
+      setState(() {
+        _options = list;
+        _loading = false;
+      });
+    } catch (e, st) {
+      AppLogger.error('SelectGarment', 'category load failed',
+          error: e, stackTrace: st);
+      if (!mounted) return;
+      setState(() => _loading = false);
+      SnackbarHelper.showError(context, friendlyError(e));
+    }
+  }
+
+  /// Which measurement buckets a built-in category writes to.
+  List<String> _garmentTypesForBuiltin(String builtinKey) {
+    switch (builtinKey) {
       case 'full_suit':
       case 'naap_suit':
         return ['shirt', 'shalwar_trouser'];
@@ -100,38 +76,58 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
     }
   }
 
-  Future<void> _onGarmentTapped(String stitchType) async {
-    final garmentTypes = _garmentTypesForStitch(stitchType);
-    final List<Measurement> savedMeasurements = [];
-
-    for (final gt in garmentTypes) {
-      final data = await _sync.getMeasurementsByGarmentType(
-          widget.customer.id, gt);
-      // Rows come back newest-first, and every order adds another row for the
-      // same garment. Taking only the newest matters: _prefillFromSaved
-      // overwrites the form for each record it is given, so passing the whole
-      // history let the OLDEST measurements win — a loyal customer with years
-      // of orders was measured from their very first visit.
-      if (data.isNotEmpty) {
-        savedMeasurements.add(Measurement.fromMap(data.first));
+  Future<void> _onCategoryTapped(StitchCategory category) async {
+    try {
+      final saved = await _loadSavedMeasurements(category);
+      if (!mounted) return;
+      if (saved.isNotEmpty) {
+        _showSavedMeasurementsSheet(category, saved);
+      } else {
+        _navigateToMeasurements(category, null);
       }
-    }
-
-    if (!mounted) return;
-
-    if (savedMeasurements.isNotEmpty) {
-      _showSavedMeasurementsSheet(stitchType, savedMeasurements);
-    } else {
-      _navigateToMeasurements(stitchType, null);
+    } catch (e, st) {
+      AppLogger.error('SelectGarment', 'saved measurement load failed',
+          error: e, stackTrace: st);
+      if (!mounted) return;
+      // A failed history lookup must not block a new order — fall through to a
+      // blank form rather than dead-ending the tailor mid-sale.
+      _navigateToMeasurements(category, null);
     }
   }
 
+  Future<List<Measurement>> _loadSavedMeasurements(
+      StitchCategory category) async {
+    final garmentTypes = category.isBuiltin
+        ? [
+            ..._garmentTypesForBuiltin(category.builtinKey!),
+            // A built-in the tailor extended also has a row of its own extra
+            // fields to restore.
+            if (category.fields.isNotEmpty) categoryGarmentType(category.id),
+          ]
+        : [categoryGarmentType(category.id)];
+
+    final saved = <Measurement>[];
+    for (final gt in garmentTypes) {
+      final rows =
+          await _sync.getMeasurementsByGarmentType(widget.customer.id, gt);
+      // Rows come back newest-first and every order adds another for the same
+      // garment. Taking only the newest matters: the measurement form is
+      // overwritten per record it is given, so passing the whole history let the
+      // OLDEST measurements win — a loyal customer with years of orders was
+      // measured from their very first visit.
+      if (rows.isNotEmpty) {
+        saved.add(Measurement.fromMap(rows.first));
+      }
+    }
+    return saved;
+  }
+
   void _showSavedMeasurementsSheet(
-      String stitchType, List<Measurement> measurements) {
+      StitchCategory category, List<Measurement> measurements) {
     showModalBottomSheet(
       context: context,
-      // Without this the sheet is capped at 9/16 of the screen and its
-      // action buttons can be pushed out of reach.
+      // Without this the sheet is capped at 9/16 of the screen and its action
+      // buttons can be pushed out of reach.
       isScrollControlled: true,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
@@ -178,10 +174,7 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            // garment_type is stored as 'shirt' /
-                            // 'shalwar_trouser', which have no translation
-                            // entries — .tr() echoed the raw key at the user.
-                            '${GarmentLabels.titleCase(m.garmentType)}'
+                            '${_measurementTitle(m, category)}'
                             ' — ${_formatDate(m.updatedAt)}',
                             style: const TextStyle(
                               fontSize: 14,
@@ -199,7 +192,7 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
                     child: OutlinedButton(
                       onPressed: () {
                         Navigator.of(ctx).pop();
-                        _navigateToMeasurements(stitchType, null);
+                        _navigateToMeasurements(category, null);
                       },
                       style: OutlinedButton.styleFrom(
                         foregroundColor: AppColors.primary,
@@ -217,7 +210,7 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
                     child: ElevatedButton(
                       onPressed: () {
                         Navigator.of(ctx).pop();
-                        _navigateToMeasurements(stitchType, measurements);
+                        _navigateToMeasurements(category, measurements);
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.primary,
@@ -239,21 +232,54 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
     );
   }
 
+  /// A custom category's rows are stored under `cat:<id>`, which is not
+  /// something to show a tailor — use the category name instead.
+  String _measurementTitle(Measurement m, StitchCategory category) {
+    if (isCategoryGarmentType(m.garmentType)) return category.name;
+    return GarmentLabels.titleCase(m.garmentType);
+  }
+
   String _formatDate(DateTime date) {
     return '${date.day}/${date.month}/${date.year}';
   }
 
   void _navigateToMeasurements(
-      String stitchType, List<Measurement>? savedMeasurements) {
+      StitchCategory category, List<Measurement>? savedMeasurements) {
+    final customer = widget.customer;
+
+    if (!category.isBuiltin) {
+      Navigator.of(context).push(
+        SlidePageRoute(
+          page: CustomMeasurementScreen(
+            customerId: customer.id,
+            customerName: customer.name,
+            customerPhone: customer.phone,
+            customerGender: customer.gender,
+            customerSerialNumber: customer.serialNumber,
+            category: category,
+            savedMeasurement:
+                (savedMeasurements != null && savedMeasurements.isNotEmpty)
+                    ? savedMeasurements.first
+                    : null,
+          ),
+        ),
+      );
+      return;
+    }
+
     Navigator.of(context).push(
       SlidePageRoute(
         page: MeasurementScreen(
-          customerId: widget.customer.id,
-          customerName: widget.customer.name,
-          customerPhone: widget.customer.phone,
-          customerGender: widget.customer.gender,
-          customerSerialNumber: widget.customer.serialNumber,
-          stitchType: stitchType,
+          customerId: customer.id,
+          customerName: customer.name,
+          customerPhone: customer.phone,
+          customerGender: customer.gender,
+          customerSerialNumber: customer.serialNumber,
+          // Built-ins keep their original stitch string so every existing
+          // branch (which sections to show, the receipt, the WhatsApp text)
+          // keeps working after a rename.
+          stitchType: category.builtinKey!,
+          category: category,
           savedMeasurements: savedMeasurements,
         ),
       ),
@@ -263,148 +289,127 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
   @override
   Widget build(BuildContext context) {
     final customer = widget.customer;
-    final options = _garmentOptions;
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         title: Text('${customer.name} (#${customer.serialNumber})'),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 440),
-            child: Column(
-              children: [
-                Text(
-                  'what_to_stitch'.tr(),
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
+      body: _loading
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.primary))
+          : SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 440),
+                  child: Column(
+                    children: [
+                      Text(
+                        'what_to_stitch'.tr(),
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      const Text(
+                        'کیا سینا ہے؟',
+                        style: TextStyle(
+                          fontSize: 15,
+                          fontFamily: 'NotoNastaliqUrdu',
+                          color: AppColors.textSecondary,
+                          height: 2.0,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 24),
+                      GridView.count(
+                        crossAxisCount: 2,
+                        mainAxisSpacing: 14,
+                        crossAxisSpacing: 14,
+                        childAspectRatio: 0.95,
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        children: _options
+                            .map((category) => _GarmentCard(
+                                  category: category,
+                                  onTap: () => _onCategoryTapped(category),
+                                ))
+                            .toList(),
+                      ),
+                    ],
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                const SizedBox(height: 4),
-                const Text(
-                  'کیا سینا ہے؟',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontFamily: 'NotoNastaliqUrdu',
-                    color: AppColors.textSecondary,
-                    height: 2.0,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                GridView.count(
-                  crossAxisCount: 2,
-                  mainAxisSpacing: 14,
-                  crossAxisSpacing: 14,
-                  childAspectRatio: 0.95,
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  children: options.map((option) => _GarmentCard(
-                        option: option,
-                        onTap: option.enabled
-                            ? () => _onGarmentTapped(option.stitchType)
-                            : () => ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('coming_soon'.tr()),
-                                    duration: const Duration(seconds: 2),
-                                  ),
-                                ),
-                      )).toList(),
-                ),
-              ],
+              ),
             ),
-          ),
-        ),
-      ),
     );
   }
 }
 
-class _GarmentOption {
-  final String stitchType;
-  final String titleKey;
-  final String urduName;
-  final IconData icon;
-  final Color circleColor;
-  final Color iconColor;
-  final bool enabled;
-
-  const _GarmentOption({
-    required this.stitchType,
-    required this.titleKey,
-    required this.urduName,
-    required this.icon,
-    required this.circleColor,
-    required this.iconColor,
-    required this.enabled,
-  });
-}
-
 class _GarmentCard extends StatelessWidget {
-  final _GarmentOption option;
-  final VoidCallback? onTap;
+  final StitchCategory category;
+  final VoidCallback onTap;
 
-  const _GarmentCard({required this.option, this.onTap});
+  const _GarmentCard({required this.category, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
-    return Opacity(
-      opacity: option.enabled ? 1.0 : 0.5,
-      child: Container(
-        decoration: BoxDecoration(
+    final (circle, iconColor) = CategoryIcons.tintFor(category.id);
+    final urduName = category.nameUrdu?.trim() ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        child: InkWell(
           borderRadius: BorderRadius.circular(20),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.06),
-              blurRadius: 16,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Material(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(20),
-            onTap: onTap,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: option.circleColor,
-                      borderRadius: BorderRadius.circular(16),
-                    ),
-                    child: Icon(
-                      option.icon,
-                      size: 26,
-                      color: option.iconColor,
-                    ),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  width: 52,
+                  height: 52,
+                  decoration: BoxDecoration(
+                    color: circle,
+                    borderRadius: BorderRadius.circular(16),
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    option.titleKey.tr(),
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
-                    ),
-                    textAlign: TextAlign.center,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+                  child: Icon(
+                    CategoryIcons.resolve(category.iconKey),
+                    size: 26,
+                    color: iconColor,
                   ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  category.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                if (urduName.isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
-                    option.urduName,
+                    urduName,
                     style: const TextStyle(
                       fontSize: 11,
                       fontFamily: 'NotoNastaliqUrdu',
@@ -415,19 +420,8 @@ class _GarmentCard extends StatelessWidget {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  if (!option.enabled) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      'coming_soon'.tr(),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Color(0xFFF57C00),
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
                 ],
-              ),
+              ],
             ),
           ),
         ),

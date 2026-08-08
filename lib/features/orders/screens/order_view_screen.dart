@@ -164,6 +164,10 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
 
   String _garmentLabel() {
     final isUrdu = context.locale.languageCode == 'ur';
+    // A tailor-defined category (or a renamed built-in) carries its own name;
+    // its raw stitch_type is an opaque id that must never reach the screen.
+    final snapshot = _order['category_name']?.toString().trim() ?? '';
+    if (snapshot.isNotEmpty) return snapshot;
     switch (_order['stitch_type']) {
       case 'full_suit':
         return isUrdu ? 'مکمل سوٹ' : 'Full Suit';
@@ -363,13 +367,19 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
       // Build grouped measurements — preserve garment-type structure for PDF
       final List<Map<String, dynamic>> groupedMeasurements = [];
       for (final m in _measurements) {
-        if (m.measurements.isEmpty) continue;
         Map<String, dynamic> options = {};
         if (m.additionalOptions != null && m.additionalOptions!.isNotEmpty) {
           try {
             options = Map<String, dynamic>.from(
                 json.decode(m.additionalOptions!) as Map<String, dynamic>);
           } catch (_) {}
+        }
+        // A tailor-defined category can be all switches and choices with no
+        // numeric measurement at all. Skipping on empty measurements alone
+        // would drop that whole group from the worker's copy.
+        if (m.measurements.isEmpty &&
+            GarmentLabels.visibleOptions(options).isEmpty) {
+          continue;
         }
         groupedMeasurements.add({
           'garmentType': m.garmentType,
@@ -393,6 +403,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
             int.tryParse(_order['customer_serial']?.toString() ?? '0') ?? 0,
         customerGender: _order['customer_gender'] ?? 'male',
         stitchType: _order['stitch_type'] ?? '',
+        categoryName: _order['category_name']?.toString(),
         shirtSubType: _order['shirt_sub_type'],
         bottomType: _order['bottom_type'],
         bottomWaistband: _order['bottom_waistband'],
@@ -964,21 +975,25 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: _measurements.map((m) {
                   final data = m.measurements;
-                  Map<String, dynamic> options = {};
+                  Map<String, dynamic> rawOptions = {};
                   try {
                     if (m.additionalOptions != null &&
                         m.additionalOptions!.isNotEmpty) {
-                      options = json.decode(m.additionalOptions!)
+                      rawOptions = json.decode(m.additionalOptions!)
                           as Map<String, dynamic>;
                     }
                   } catch (_) {}
+                  // Tailor-defined fields are named by the snapshot saved with
+                  // the order, not by the built-in key table.
+                  final labels = GarmentLabels.labelSnapshot(rawOptions);
+                  final options = GarmentLabels.visibleOptions(rawOptions);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       const Divider(height: 1),
                       const SizedBox(height: 8),
                       Text(
-                        GarmentLabels.measurementLabel(m.garmentType),
+                        GarmentLabels.groupLabel(m.garmentType, rawOptions),
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
@@ -1002,7 +1017,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          GarmentLabels.measurementLabel(e.key),
+                                          GarmentLabels.fieldLabel(
+                                              e.key, labels),
                                           style: const TextStyle(
                                             fontSize: 12,
                                             color: AppColors.textSecondary,
@@ -1035,7 +1051,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                   padding:
                                       const EdgeInsets.only(bottom: 2),
                                   child: Text(
-                                    '${GarmentLabels.measurementLabel(e.key)}: '
+                                    '${GarmentLabels.fieldLabel(e.key, labels)}: '
                                     '${_optionText(e.value)}',
                                     style: const TextStyle(
                                       fontSize: 12,

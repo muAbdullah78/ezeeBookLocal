@@ -1,3 +1,5 @@
+import '../constants/measurement_keys.dart';
+
 /// Shared garment / stitch-type label helpers.
 ///
 /// These labels were previously duplicated across the order screens, the PDF
@@ -57,13 +59,21 @@ class GarmentLabels {
 
   /// Full garment description: category plus any sub-types, e.g.
   /// "Full Suit — Kameez + Shalwar".
+  ///
+  /// [categoryName] is the name snapshotted on the order. It wins when present:
+  /// a tailor-defined category's `stitch_type` is an opaque id (title-casing it
+  /// would print a UUID at the customer), and a renamed built-in should show its
+  /// new name.
   static String describe({
     String? stitchTypeValue,
+    String? categoryName,
     String? shirtSubType,
     String? bottomType,
     bool urdu = false,
   }) {
-    var label = stitchType(stitchTypeValue, urdu: urdu);
+    final snapshot = categoryName?.trim() ?? '';
+    var label =
+        snapshot.isNotEmpty ? snapshot : stitchType(stitchTypeValue, urdu: urdu);
     final parts = <String>[
       if (shirtSubType != null && shirtSubType.isNotEmpty)
         subType(shirtSubType, urdu: urdu),
@@ -116,6 +126,51 @@ class GarmentLabels {
   /// fields added by a custom category still print sensibly.
   static String measurementLabel(String key) =>
       _measurementLabels[key] ?? titleCase(key);
+
+  /// Label for a field, preferring the snapshot saved with the order.
+  ///
+  /// A tailor-defined field has no entry in [_measurementLabels] — its name is
+  /// whatever the tailor typed — so the snapshot is the only truthful source.
+  static String fieldLabel(String key, Map<String, String>? snapshot) {
+    final s = snapshot?[key]?.trim();
+    if (s != null && s.isNotEmpty) return s;
+    return measurementLabel(key);
+  }
+
+  /// Heading for a measurement group.
+  ///
+  /// Custom groups are stored under `cat:<uuid>`, which must never reach the
+  /// screen; their snapshotted section name is used instead.
+  static String groupLabel(String garmentType, Map<String, dynamic>? options) {
+    final section = options?[MeasurementMetaKeys.section]?.toString().trim();
+    if (section != null && section.isNotEmpty) return section;
+    if (isCategoryGarmentType(garmentType)) {
+      return titleCase(garmentType.substring(kCategoryGarmentPrefix.length));
+    }
+    return measurementLabel(garmentType);
+  }
+
+  /// Pull the `{field_key: label}` snapshot out of a decoded options map.
+  static Map<String, String> labelSnapshot(Map<String, dynamic>? options) {
+    final raw = options?[MeasurementMetaKeys.labels];
+    if (raw is! Map) return const {};
+    final out = <String, String>{};
+    raw.forEach((k, v) {
+      final label = v?.toString().trim() ?? '';
+      if (label.isNotEmpty) out[k.toString()] = label;
+    });
+    return out;
+  }
+
+  /// The options a human should see — the reserved `_labels` / `_section`
+  /// bookkeeping entries are stripped so they never print as instructions.
+  static Map<String, dynamic> visibleOptions(Map<String, dynamic>? options) {
+    if (options == null) return const {};
+    return {
+      for (final e in options.entries)
+        if (!MeasurementMetaKeys.isMeta(e.key)) e.key: e.value,
+    };
+  }
 
   /// Convert a snake_case key into readable Title Case ("cuff_width" →
   /// "Cuff Width"). Used for measurement/option keys and for custom

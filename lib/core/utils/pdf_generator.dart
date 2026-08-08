@@ -61,6 +61,9 @@ class PdfGenerator {
     required int customerSerialNumber,
     required String customerGender,
     required String stitchType,
+    /// Name snapshotted on the order. Wins over [stitchType], which for a
+    /// tailor-defined category is an opaque id.
+    String? categoryName,
     String? shirtSubType,
     String? bottomType,
     String? bottomWaistband,
@@ -103,7 +106,7 @@ class PdfGenerator {
     final phone = (shopProfile['phone'] ?? '').toString();
 
     final garmentStr = [
-      _garmentLabel(stitchType),
+      _garmentLabel(stitchType, categoryName: categoryName),
       if (shirtSubType != null && shirtSubType.isNotEmpty)
         _subTypeLabel(shirtSubType),
     ].where((s) => s.isNotEmpty).join(' | ');
@@ -117,6 +120,24 @@ class PdfGenerator {
       if (elasticWidth != null && elasticWidth.isNotEmpty)
         '${GarmentLabels.titleCase(elasticWidth)}"',
     ].join(' | ');
+    // Normalise the groups once rather than re-decoding the snapshot per widget.
+    // A tailor-defined group arrives under an opaque `cat:<id>` and carries its
+    // real heading and field names in its options snapshot.
+    final groups = [
+      for (final g in measurementGroups)
+        _MeasurementGroup(
+          heading: GarmentLabels.groupLabel(
+            g['garmentType'] as String? ?? '',
+            g['additionalOptions'] as Map<String, dynamic>?,
+          ),
+          measurements: (g['measurements'] as Map<String, dynamic>?) ?? const {},
+          options: GarmentLabels.visibleOptions(
+              g['additionalOptions'] as Map<String, dynamic>?),
+          labels: GarmentLabels.labelSnapshot(
+              g['additionalOptions'] as Map<String, dynamic>?),
+        ),
+    ];
+
     // One colour is captured PER SUIT, so a 3-suit order has 3 colours.
     // Flattening them lost which suit is which; number them when it matters.
     final colorsStr = colors.isEmpty
@@ -237,7 +258,9 @@ class PdfGenerator {
               mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
               children: [
                 _inlineLabel('Garment', garmentStr.isEmpty ? '-' : garmentStr),
-                _inlineLabel('Bottom', bottomStr.isEmpty ? '-' : bottomStr),
+                // A tailor-defined category has no shirt/bottom split, so an
+                // empty "Bottom: -" would just be noise on the worker's copy.
+                if (bottomStr.isNotEmpty) _inlineLabel('Bottom', bottomStr),
                 _inlineLabel('Quantity', quantity.toString()),
                 _inlineLabel('Color', colorsStr),
               ],
@@ -246,13 +269,13 @@ class PdfGenerator {
           pw.SizedBox(height: 14),
 
           // ── MEASUREMENTS ──
-          if (measurementGroups.isNotEmpty) ...[
+          if (groups.isNotEmpty) ...[
             _sectionHeader('Measurements', headerStyle),
             pw.SizedBox(height: 6),
-            for (final group in measurementGroups) ...[
+            for (final group in groups) ...[
               pw.SizedBox(height: 8),
               pw.Text(
-                _formatGarmentName(group['garmentType'] as String? ?? ''),
+                group.heading,
                 style: pw.TextStyle(
                   font: pw.Font.helveticaBold(),
                 fontFallback: _fallback,
@@ -261,12 +284,9 @@ class PdfGenerator {
                 ),
               ),
               pw.SizedBox(height: 4),
-              _buildMeasurementsTable(
-                  group['measurements'] as Map<String, dynamic>),
-              if ((group['additionalOptions'] as Map<String, dynamic>)
-                  .isNotEmpty)
-                _buildAdditionalOptionsBlock(
-                    group['additionalOptions'] as Map<String, dynamic>),
+              _buildMeasurementsTable(group.measurements, group.labels),
+              if (group.options.isNotEmpty)
+                _buildAdditionalOptionsBlock(group.options, group.labels),
             ],
             pw.SizedBox(height: 6),
           ],
@@ -464,7 +484,10 @@ class PdfGenerator {
     );
   }
 
-  static pw.Widget _buildMeasurementsTable(Map<String, dynamic> data) {
+  static pw.Widget _buildMeasurementsTable(
+    Map<String, dynamic> data,
+    Map<String, String> labels,
+  ) {
     final entries = data.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
         .toList();
@@ -517,7 +540,7 @@ class PdfGenerator {
                 padding: const pw.EdgeInsets.symmetric(
                     horizontal: 8, vertical: 4),
                 child: pw.Text(
-                  GarmentLabels.measurementLabel(entries[i].key),
+                  GarmentLabels.fieldLabel(entries[i].key, labels),
                   style: const pw.TextStyle(fontSize: 10),
                 ),
               ),
@@ -547,7 +570,9 @@ class PdfGenerator {
         .join(' ');
   }
 
-  static String _garmentLabel(String type) {
+  static String _garmentLabel(String type, {String? categoryName}) {
+    final snapshot = categoryName?.trim() ?? '';
+    if (snapshot.isNotEmpty) return snapshot;
     switch (type) {
       case 'full_suit':
         return 'Full Suit';
@@ -610,7 +635,9 @@ class PdfGenerator {
   }
 
   static pw.Widget _buildAdditionalOptionsBlock(
-      Map<String, dynamic> options) {
+    Map<String, dynamic> options,
+    Map<String, String> labels,
+  ) {
     final validEntries = options.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
         .toList();
@@ -635,7 +662,7 @@ class PdfGenerator {
             return pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 2),
               child: pw.Text(
-                '${GarmentLabels.measurementLabel(e.key)}: $displayValue',
+                '${GarmentLabels.fieldLabel(e.key, labels)}: $displayValue',
                 style: const pw.TextStyle(fontSize: 10),
               ),
             );
@@ -669,11 +696,20 @@ class PdfGenerator {
     return s;
   }
 
-  static String _formatGarmentName(String garmentType) {
-    if (garmentType.isEmpty) return '';
-    return garmentType
-        .split('_')
-        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1)}')
-        .join(' ');
-  }
+}
+
+/// One measurement group ready to render: heading, values, options and the
+/// label snapshot needed to name a tailor-defined field.
+class _MeasurementGroup {
+  final String heading;
+  final Map<String, dynamic> measurements;
+  final Map<String, dynamic> options;
+  final Map<String, String> labels;
+
+  const _MeasurementGroup({
+    required this.heading,
+    required this.measurements,
+    required this.options,
+    required this.labels,
+  });
 }

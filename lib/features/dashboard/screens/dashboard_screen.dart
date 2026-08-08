@@ -142,6 +142,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   String _garmentLabel(Map<String, dynamic> order) {
     final isUrdu = context.locale.languageCode == 'ur';
+    // A tailor-defined category (or a renamed built-in) carries its own name;
+    // its raw stitch_type is an opaque id that must never reach the screen.
+    final snapshot = order['category_name']?.toString().trim() ?? '';
+    if (snapshot.isNotEmpty) return snapshot;
     switch (order['stitch_type']) {
       case 'full_suit':
         return isUrdu ? 'مکمل سوٹ' : 'Full Suit';

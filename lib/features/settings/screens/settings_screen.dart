@@ -14,6 +14,7 @@ import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../core/widgets/root_gate.dart';
 import '../../../core/widgets/shimmer_loading.dart';
+import '../../categories/screens/manage_categories_screen.dart';
 import '../../security/screens/set_pin_screen.dart';
 import 'about_screen.dart';
 import 'edit_profile_screen.dart';
@@ -241,6 +242,22 @@ class _SettingsScreenState extends State<SettingsScreen> {
         padding: const EdgeInsets.only(bottom: 16),
         children: [
           _buildProfileCard(),
+          const SizedBox(height: 12),
+
+          // Shop setup — the tailor's own stitching categories
+          _sectionLabel('section_shop'.tr()),
+          _card([
+            _buildSettingsItem(
+              icon: Icons.category_outlined,
+              title: 'stitching_categories'.tr(),
+              subtitle: 'stitching_categories_subtitle'.tr(),
+              onTap: () {
+                Navigator.of(context).push(
+                  SlidePageRoute(page: const ManageCategoriesScreen()),
+                );
+              },
+            ),
+          ]),
           const SizedBox(height: 12),
 
           // Data section — backup & restore

@@ -36,7 +36,11 @@ class BackupImportResult {
 /// later imported on the new device.
 class BackupService {
   static const _magic = 'ezeebook_backup';
-  static const _backupVersion = 1;
+
+  /// 2 adds the tailor's stitching categories and their fields. Version 1 files
+  /// still restore — `importAllData` re-seeds the built-in categories when a
+  /// backup carries none.
+  static const _backupVersion = 2;
 
   final _db = DatabaseHelper();
 

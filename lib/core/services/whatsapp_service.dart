@@ -38,6 +38,9 @@ class WhatsAppService {
     final serial = (customerSerial ?? order['customer_serial'] ?? '').toString();
     final garment = GarmentLabels.describe(
       stitchTypeValue: order['stitch_type']?.toString(),
+      // A tailor-defined category's stitch_type is an opaque id; the name
+      // snapshotted on the order is what the customer should read.
+      categoryName: order['category_name']?.toString(),
       shirtSubType: order['shirt_sub_type']?.toString(),
       bottomType: order['bottom_type']?.toString(),
     );
@@ -78,6 +81,9 @@ class WhatsAppService {
     final name = customerName ?? (order['customer_name'] ?? '').toString();
     final garment = GarmentLabels.describe(
       stitchTypeValue: order['stitch_type']?.toString(),
+      // A tailor-defined category's stitch_type is an opaque id; the name
+      // snapshotted on the order is what the customer should read.
+      categoryName: order['category_name']?.toString(),
       shirtSubType: order['shirt_sub_type']?.toString(),
       bottomType: order['bottom_type']?.toString(),
     );
