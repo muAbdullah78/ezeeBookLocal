@@ -1,7 +1,11 @@
 name: ezeebook
 description: "EzeeBook - Tailor Shop Management App"
 publish_to: 'none'
-version: 2.0.0+7
+# Bump BOTH the name (2.1.0) and the build number (+8) for every build handed
+# to a shop. Android compares the build number to decide whether an install is
+# an update, and the name is what Settings → About shows the tailor, so it is
+# how you know which shop is running what.
+version: 2.1.0+8
 
 environment:
   sdk: ^3.7.0

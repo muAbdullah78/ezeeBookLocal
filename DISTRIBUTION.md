@@ -219,3 +219,37 @@ Yes — Settings → Language → اردو. It switches the whole app.
 - [ ] Set a PIN, close the app, reopen it, confirm it asks
 - [ ] Keep a spare copy of the APK on your phone so you can install in a shop
       with no laptop
+
+---
+
+## 6. Handing out an update
+
+Once a shop has the app, giving them a newer copy is the same install you did
+the first time — with two rules.
+
+**Bump the version before every build you hand out.** In `pubspec.yaml`:
+
+```yaml
+version: 2.1.0+8      # name+buildNumber
+```
+
+Increase the build number (`+8` → `+9`) every single time, and also update
+`kAppVersion` in `lib/core/constants/app_constants.dart` to match the name so
+Settings → About shows the right thing. Android uses the build number to decide
+whether a file is an update, and the name is how you know which shop is running
+what when one of them phones you.
+
+**Install over the top — never uninstall first.** Installing a newer APK on top
+of the old one keeps all their customers, orders and measurements.
+**Uninstalling deletes everything.** So:
+
+- ✅ Send them the new APK, they open it, Android says "Update", they tap it.
+- ❌ Never tell them to remove the old app first.
+
+This only works if the new APK is signed with the same keystore as the one they
+already have. If Android refuses the update saying the app is not signed the
+same way, you have used a different key — stop, and find the original `.jks`.
+Do not tell them to uninstall as a workaround; their register is in there.
+
+Ask them to take a backup (Settings → Backup Data) before an update anyway.
+It costs one tap and covers you.
