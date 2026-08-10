@@ -590,5 +590,7 @@
   "backup_last": "Last backup: {date}",
   "backup_reminder_title": "Back up your data",
   "backup_reminder_body": "Your customers and orders are saved only on this phone. Save a backup file so nothing is lost if the phone is lost or broken.",
-  "backup_now": "Back up now"
+  "backup_now": "Back up now",
+  "serial_invalid": "Enter a number of 1 or higher",
+  "serial_taken": "#{serial} is already used by {name}. Choose another number."
 }

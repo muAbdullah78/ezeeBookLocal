@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:easy_localization/easy_localization.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
+import '../../../core/utils/app_logger.dart';
 import '../../../core/utils/error_messages.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../../models/customer.dart';
@@ -61,11 +62,44 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
   Future<void> _handleSave() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final serialNumber = int.tryParse(_serialController.text.trim());
+    if (serialNumber == null || serialNumber < 1) {
+      SnackbarHelper.showError(context, 'serial_invalid'.tr());
+      return;
+    }
+
+    // The serial is the customer's page number in the tailor's register: it
+    // prints on every receipt and WhatsApp message, and the customer list is
+    // searchable by it. Now that it can be typed by hand, two customers could
+    // end up sharing one — so check before writing rather than discovering it
+    // on a receipt.
+    try {
+      final clash = await _sync.getCustomerBySerial(
+        serialNumber,
+        excludeId: widget.customer?.id,
+      );
+      if (clash != null) {
+        if (!mounted) return;
+        SnackbarHelper.showError(
+          context,
+          'serial_taken'.tr(namedArgs: {
+            'serial': '$serialNumber',
+            'name': (clash['name'] ?? '').toString(),
+          }),
+        );
+        return;
+      }
+    } catch (e, st) {
+      // A failed uniqueness check must not block the sale — log it and let the
+      // save proceed rather than dead-ending the tailor at the counter.
+      AppLogger.error('AddCustomer', 'serial check failed',
+          error: e, stackTrace: st);
+    }
+
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     try {
-      final serialNumber = int.parse(_serialController.text.trim());
-
       if (_isEditing) {
         final updated = widget.customer!.copyWith(
           name: _nameController.text.trim(),
@@ -92,8 +126,10 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
 
       Navigator.of(context).pop(true);
     } catch (e) {
-      setState(() => _isLoading = false);
+      // mounted first: setState on a disposed widget throws, which would mask
+      // the real save error behind a framework assertion.
       if (!mounted) return;
+      setState(() => _isLoading = false);
       SnackbarHelper.showError(context, friendlyError(e));
     }
   }
@@ -174,10 +210,12 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
               const SizedBox(height: 6),
               TextFormField(
                 controller: _serialController,
-                readOnly: true,
                 keyboardType: TextInputType.number,
                 inputFormatters: [
                   FilteringTextInputFormatter.digitsOnly,
+                  // Six digits is more register pages than any shop will use,
+                  // and it keeps the value inside a range int.parse handles.
+                  LengthLimitingTextInputFormatter(6),
                 ],
                 decoration: InputDecoration(
                   hintText: '$_nextSerialNumber',
@@ -189,8 +227,13 @@ class _AddCustomerScreenState extends State<AddCustomerScreen> {
                   ),
                 ),
                 validator: (value) {
-                  if (value == null || value.trim().isEmpty) {
-                    return 'error_required_field'.tr();
+                  final raw = value?.trim() ?? '';
+                  if (raw.isEmpty) return 'error_required_field'.tr();
+                  final parsed = int.tryParse(raw);
+                  // A leading zero, or 0 itself, would print as "#0" on every
+                  // receipt — reject it here rather than at the printer.
+                  if (parsed == null || parsed < 1) {
+                    return 'serial_invalid'.tr();
                   }
                   return null;
                 },

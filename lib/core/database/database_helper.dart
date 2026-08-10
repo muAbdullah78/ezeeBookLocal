@@ -486,6 +486,31 @@ class DatabaseHelper {
     return result.first['count'] as int;
   }
 
+  /// The customer already holding [serial], or null if it is free.
+  ///
+  /// [excludeId] is the customer being edited — their own number must not count
+  /// as a clash when they re-save without changing it.
+  ///
+  /// Serial numbers are the tailor's page number for a customer: they print on
+  /// every receipt and every WhatsApp message, and the customer list is
+  /// searchable by `#12`. Two customers sharing one would make all three lie,
+  /// so the add/edit form checks here before saving.
+  Future<Map<String, dynamic>?> getCustomerBySerial(
+    int serial, {
+    String? excludeId,
+  }) async {
+    final db = await database;
+    final results = await db.query(
+      'customers',
+      where: excludeId == null
+          ? 'serial_number = ?'
+          : 'serial_number = ? AND id != ?',
+      whereArgs: excludeId == null ? [serial] : [serial, excludeId],
+      limit: 1,
+    );
+    return results.isNotEmpty ? results.first : null;
+  }
+
   Future<int> getNextCustomerSerial() async {
     final db = await database;
     final result = await db.rawQuery(

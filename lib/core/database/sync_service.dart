@@ -17,6 +17,10 @@ class SyncService {
 
   Future<int> getNextCustomerSerial() => _db.getNextCustomerSerial();
 
+  Future<Map<String, dynamic>?> getCustomerBySerial(int serial,
+          {String? excludeId}) =>
+      _db.getCustomerBySerial(serial, excludeId: excludeId);
+
   Future<int> getActiveOrderCount() => _db.getActiveOrderCount();
 
   Future<int> getOverdueOrderCount() => _db.getOverdueOrderCount();
