@@ -375,3 +375,35 @@ Signing note: `android/app/build.gradle.kts` already refuses to build a release
 without `key.properties`, so a copy can never ship debug-signed. The keystore
 must be preserved — a differently-signed update cannot install over an existing
 copy, and uninstalling wipes the tailor's data.
+
+### 2026-08-10: First-launch restore ("I already use EzeeBook")
+
+A tailor moving to a new phone had no way in except the shop-setup form. They
+had to invent a shop profile, reach the dashboard, find Settings, and only then
+restore — which immediately overwrote everything they had just typed. It read
+like creating a second account, and there was no answer to "I already use this
+app, where does my backup file go?"
+
+There was never an actual duplicate-account bug: `shop_profiles` holds one row
+forced to `kLocalShopId`, and `importAllData` deletes every table before
+inserting, so a restore replaces the profile rather than adding one. The defect
+was the ordering of the flow, not the data model.
+
+- `WelcomeChoiceScreen` (onboarding) now sits between the disclaimer and shop
+  setup: "Set up my shop" or "I already use EzeeBook". RootGate renders it for
+  `!shop_setup_done`.
+- The new-shop path renders `ShopSetupScreen` in place (not pushed — a pushed
+  route would sit above the gate after it rebuilds), with `onBack` so choosing
+  wrong is not a dead end.
+- The restore path picks a file, imports, then reads the shop profile back. If
+  the backup carried no profile it falls through to the setup form rather than
+  marking setup complete, which would have left receipts saying "My Shop".
+- `offerPinSetup()` moved to `set_pin_screen.dart` and is shared by both paths.
+
+The app-lock PIN is deliberately NOT in the backup: it lives in
+SharedPreferences, and a salted 4-digit hash travelling over WhatsApp would be
+brute-forced instantly. The restore path offers a fresh PIN at the end.
+
+There is still no login and there should not be: it would need a server holding
+customer measurements, an account, and a recurring fee — the model this app was
+built to escape. The backup file is the tailor's identity.

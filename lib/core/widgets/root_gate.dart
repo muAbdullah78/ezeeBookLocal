@@ -5,7 +5,7 @@ import '../database/sync_service.dart';
 import '../services/pin_service.dart';
 import '../../features/dashboard/screens/main_shell.dart';
 import '../../features/onboarding/screens/disclaimer_screen.dart';
-import '../../features/onboarding/screens/shop_setup_screen.dart';
+import '../../features/onboarding/screens/welcome_choice_screen.dart';
 import '../../features/security/screens/pin_lock_screen.dart';
 
 /// Root routing widget. Decides what the tailor sees at launch:
@@ -150,7 +150,10 @@ class _RootGateState extends State<RootGate> with WidgetsBindingObserver {
     }
 
     if (!_shopSetupDone) {
-      return ShopSetupScreen(
+      // Offers both ways in: set up a new shop, or restore a backup from the
+      // tailor's previous phone. Restore has to be reachable here — it used to
+      // live only in Settings, which is behind this very screen.
+      return WelcomeChoiceScreen(
         onDone: () async {
           final pinSet = await PinService().isPinSet();
           if (!mounted) return;

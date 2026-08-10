@@ -3,7 +3,41 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/pin_service.dart';
+import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
+
+/// Ask whether to set an app-lock PIN, and set one if wanted.
+///
+/// Shared by both onboarding paths — creating a new shop, and restoring a
+/// backup onto a new phone. The PIN deliberately lives only on the device (it
+/// is not carried in the backup file), so a tailor moving phones is asked again
+/// on the new one.
+Future<void> offerPinSetup(BuildContext context) async {
+  final wantsPin = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      title: Text('pin_offer_title'.tr()),
+      content: Text('pin_offer_message'.tr()),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text('pin_offer_skip'.tr()),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.of(ctx).pop(true),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+          ),
+          child: Text('pin_offer_set'.tr()),
+        ),
+      ],
+    ),
+  );
+  if (wantsPin != true || !context.mounted) return;
+  await Navigator.of(context).push(SlidePageRoute(page: const SetPinScreen()));
+}
 
 /// Set or change the optional 4-digit app-lock PIN.
 ///

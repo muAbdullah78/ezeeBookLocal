@@ -119,7 +119,11 @@ Pick whichever is easiest in the shop.
    is not a warning about anything being wrong with your app.
 
 Then open it once with them and walk through the first-run screens:
-disclaimer → shop details → optional PIN.
+terms → **"Set up my shop"** → shop details → optional PIN.
+
+(The other button on that screen, "I already use EzeeBook", is for a tailor
+moving to a new phone — it restores a backup file instead. Do not use it on a
+first sale.)
 
 **Option C — carry a USB stick** with the APK on it. Same as option B from
 step 2. Useful where the shop has no data connection.
@@ -162,10 +166,33 @@ Straightforward, and they should do it in this order:
    a USB/memory card.
 2. Install EzeeBook on the **new** phone (you do this, or they do it from the
    APK you gave them).
-3. On the **new** phone: Settings → **Restore Data** → pick that file.
-Everything comes across: customers, orders, measurements, their categories, the
-shop profile. Tell them plainly: **do the backup before getting rid of the old
-phone**, because there is no other copy.
+3. On the **new** phone, open the app. After the terms screen it asks whether
+   this is a new shop or whether they already use EzeeBook. They tap **"I
+   already use EzeeBook"** and pick the backup file.
+
+Everything comes across: customers, orders, measurements, their own stitching
+categories, the shop name and phone. They do **not** re-enter their shop
+details — those come out of the file.
+
+Tell them plainly: **take the backup before getting rid of the old phone**,
+because there is no other copy.
+
+Two things worth mentioning while you are standing there:
+- **The app-lock PIN does not travel in the backup file**, on purpose. A 4-digit
+  PIN sitting in a file that gets sent over WhatsApp would be trivial to crack.
+  The new phone offers them a fresh PIN at the end of the restore.
+- **Restoring replaces** whatever is on the new phone. That is what you want
+  when migrating, but it means they should not spend an evening entering
+  customers on the new phone and *then* restore — the restore would wipe that
+  work.
+
+**"I already have the app. Where do I log in?"**
+There is no login, and this is worth explaining rather than apologising for.
+A login needs a company server holding their customers' names and measurements,
+which needs an account, which needs a monthly fee — and it is exactly what
+makes other apps stop working when a payment fails. EzeeBook has none of that.
+Their backup file is what proves the shop is theirs; the "I already use
+EzeeBook" button on first launch is the sign-in.
 
 **"Can I use it on two phones at once — my shop phone and my own?"**
 Not as one shared register, and it is worth being honest about why. Each

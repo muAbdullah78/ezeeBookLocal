@@ -592,5 +592,14 @@
   "backup_reminder_body": "Your customers and orders are saved only on this phone. Save a backup file so nothing is lost if the phone is lost or broken.",
   "backup_now": "Back up now",
   "serial_invalid": "Enter a number of 1 or higher",
-  "serial_taken": "#{serial} is already used by {name}. Choose another number."
+  "serial_taken": "#{serial} is already used by {name}. Choose another number.",
+  "welcome_title": "Welcome to EzeeBook",
+  "welcome_subtitle": "Are you starting fresh, or moving from another phone?",
+  "welcome_new_shop_title": "Set up my shop",
+  "welcome_new_shop_body": "First time using EzeeBook. Enter your shop details.",
+  "welcome_restore_title": "I already use EzeeBook",
+  "welcome_restore_body": "Changing phone? Choose your backup file to bring everything across.",
+  "welcome_no_account_note": "There is no account and no password to remember. Your backup file is the only thing needed to move your shop to a new phone.",
+  "restore_needs_shop_details": "Your data was restored, but the file had no shop details. Please enter them.",
+  "restore_success_counts": "Restored {customers} customers and {orders} orders."
 }

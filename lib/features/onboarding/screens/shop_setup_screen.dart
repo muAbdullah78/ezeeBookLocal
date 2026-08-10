@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/utils/app_logger.dart';
-import '../../../core/utils/page_transitions.dart';
 import '../../../core/utils/snackbar_helper.dart';
 import '../../security/screens/set_pin_screen.dart';
 
@@ -14,7 +13,11 @@ class ShopSetupScreen extends StatefulWidget {
   /// Called once setup (and the optional PIN step) is complete.
   final VoidCallback onDone;
 
-  const ShopSetupScreen({super.key, required this.onDone});
+  /// Shown as a back arrow when the tailor reached this from the first-launch
+  /// choice, so picking "new shop" by mistake is not a dead end.
+  final VoidCallback? onBack;
+
+  const ShopSetupScreen({super.key, required this.onDone, this.onBack});
 
   @override
   State<ShopSetupScreen> createState() => _ShopSetupScreenState();
@@ -57,7 +60,7 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
       await prefs.setBool('shop_setup_done', true);
       if (!mounted) return;
 
-      await _offerPin();
+      await offerPinSetup(context);
       if (!mounted) return;
       widget.onDone();
     } catch (e, st) {
@@ -69,36 +72,6 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
     }
   }
 
-  Future<void> _offerPin() async {
-    final wantsPin = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text('pin_offer_title'.tr()),
-        content: Text('pin_offer_message'.tr()),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(false),
-            child: Text('pin_offer_skip'.tr()),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(ctx).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primary,
-              foregroundColor: Colors.white,
-            ),
-            child: Text('pin_offer_set'.tr()),
-          ),
-        ],
-      ),
-    );
-    if (wantsPin == true && mounted) {
-      await Navigator.of(context).push(
-        SlidePageRoute(page: const SetPinScreen()),
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -106,6 +79,12 @@ class _ShopSetupScreenState extends State<ShopSetupScreen> {
       appBar: AppBar(
         title: Text('shop_setup_title'.tr()),
         automaticallyImplyLeading: false,
+        leading: widget.onBack == null
+            ? null
+            : IconButton(
+                icon: const Icon(Icons.arrow_back),
+                onPressed: _saving ? null : widget.onBack,
+              ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(20),
