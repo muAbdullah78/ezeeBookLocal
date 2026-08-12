@@ -453,3 +453,41 @@ order. The brand is now pinned LTR there and on the about/disclaimer screens.
 
 Note: `easy_localization` exports its own `TextDirection`, so any file using
 `TextDirection` must import it with `hide TextDirection`.
+
+### 2026-08-12 (later): PDF Urdu — the text-direction half of the fix
+
+Swapping to Naskh made the receipt show real Urdu letters, but they came out
+**unjoined and in logical order** — readable as separate letters, wrong as words.
+The font was necessary and not sufficient.
+
+Cause, from the package's own source (`pdf/lib/src/widgets/text.dart:957`):
+
+```dart
+useBidi && _textDirection == TextDirection.rtl
+    ? bidi.logicalToVisual(span.text!)   // joins + reorders
+    : span.text                          // raw, unjoined
+```
+
+`useBidi` defaults to true (`pdf/lib/src/pdf/options.dart`), so shaping is gated
+purely on the **Text widget being rtl**. Every `pw.Text` in the receipt was at
+the default ltr, so all Urdu took the raw branch.
+
+Direction is now chosen **per string** by `_dirOf()` / `_t()` in
+`pdf_generator.dart`, not set document-wide — because `logicalToVisual` ends
+with `visual.split(' ').reversed.join(' ')`, so an rtl run reverses word order.
+Applied to English that turns "Thank you for choosing" into "choosing for you
+Thank".
+
+Consequence: a string must never mix scripts inside one run. The mixed sites are
+split into single-script pieces:
+- footer → `Row['Thank you for choosing ', shopName]`
+- instruction bullets → `_bullet()` keeps the dash out of the Urdu run
+- field names → `_labelCell()` puts the Urdu name on its own line under the
+  English one instead of "English (اردو)"
+- options → `Row[label, ':', value]`, since either side can be Urdu
+
+`GarmentLabels.fieldLabel` still joins both names for the *in-app* screens;
+Flutter shapes and reorders correctly on its own, so only the PDF needs this.
+
+Known limitation: a multi-suit order whose colours mix scripts ("1. Red 2. سرخ")
+is one run and will not order perfectly. Single-colour orders, the norm, are fine.

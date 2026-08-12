@@ -69,6 +69,83 @@ class PdfGenerator {
     );
   }
 
+  // ==================== Urdu text direction ====================
+  //
+  // This is the switch that makes Urdu readable, and it is easy to miss.
+  //
+  // The `pdf` package only shapes and reorders Arabic script when the *Text
+  // widget* is right-to-left (`pdf/lib/src/widgets/text.dart`):
+  //
+  //     useBidi && _textDirection == TextDirection.rtl
+  //         ? bidi.logicalToVisual(span.text!)   // joined, visual order
+  //         : span.text                          // raw, unjoined
+  //
+  // Left at the default (ltr), Urdu prints as correct but *unjoined* letters in
+  // logical order — which reads backwards to anyone who reads Urdu. Getting the
+  // font right was necessary but did nothing on its own.
+  //
+  // Direction is chosen per string rather than set document-wide, because the
+  // package's rtl path also reverses word order: applying it to English would
+  // turn "Thank you for choosing" into "choosing for you Thank". Strings that
+  // mix both scripts are therefore never passed through as one run — they are
+  // split into single-script pieces at the call sites below.
+
+  /// Arabic script, including the presentation forms the shaper emits.
+  static bool _hasArabic(String s) => s.runes.any((r) =>
+      (r >= 0x0600 && r <= 0x06FF) || // Arabic (Urdu lives here)
+      (r >= 0x0750 && r <= 0x077F) || // Arabic Supplement
+      (r >= 0xFB50 && r <= 0xFDFF) || // Presentation Forms-A
+      (r >= 0xFE70 && r <= 0xFEFF)); // Presentation Forms-B
+
+  static pw.TextDirection _dirOf(String s) =>
+      _hasArabic(s) ? pw.TextDirection.rtl : pw.TextDirection.ltr;
+
+  /// A [pw.Text] that renders Urdu correctly and leaves Latin untouched.
+  /// Use this for anything the tailor typed.
+  static pw.Widget _t(
+    String text, {
+    pw.TextStyle? style,
+    pw.TextAlign? textAlign,
+  }) {
+    return pw.Text(
+      text,
+      style: style,
+      textAlign: textAlign,
+      textDirection: _dirOf(text),
+    );
+  }
+
+  /// A field's name for the receipt: the tailor's own name, plus the Urdu one
+  /// underneath when they entered both.
+  ///
+  /// Two lines rather than "English (اردو)" on one, so the two scripts never
+  /// share a run and the bidi pass cannot reorder the English half.
+  static pw.Widget _labelCell(
+    String key,
+    Map<String, String> labels,
+    Map<String, String> urduLabels, {
+    double fontSize = 10,
+  }) {
+    final primary = labels[key]?.trim() ?? '';
+    final base =
+        primary.isNotEmpty ? primary : GarmentLabels.measurementLabel(key);
+    final urdu = urduLabels[key]?.trim() ?? '';
+    final line = _t(base, style: pw.TextStyle(fontSize: fontSize));
+
+    // A field named only in Urdu has the same string in both maps; printing it
+    // twice would be noise.
+    if (urdu.isEmpty || urdu == base) return line;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        line,
+        _t(urdu,
+            style: pw.TextStyle(fontSize: fontSize - 0.5, color: _mutedDark)),
+      ],
+    );
+  }
+
   /// SQLite has no boolean type, so flags round-trip as `1`/`0` (and cloud
   /// backups may carry real bools or strings). Comparing such a value with
   /// `== true` silently fails, which previously hid the whole dupatta section
@@ -185,7 +262,7 @@ class PdfGenerator {
           // ── HEADER (centered, prominent shop branding) ──
           pw.SizedBox(height: 4),
           pw.Center(
-            child: pw.Text(
+            child: _t(
               shopName,
               style: pw.TextStyle(
                 fontWeight: pw.FontWeight.bold,
@@ -198,7 +275,7 @@ class PdfGenerator {
           if (ownerName.isNotEmpty || phone.isNotEmpty) ...[
             pw.SizedBox(height: 2),
             pw.Center(
-              child: pw.Text(
+              child: _t(
                 [
                   if (ownerName.isNotEmpty) ownerName,
                   if (phone.isNotEmpty) phone,
@@ -299,7 +376,7 @@ class PdfGenerator {
             pw.SizedBox(height: 6),
             for (final group in groups) ...[
               pw.SizedBox(height: 8),
-              pw.Text(
+              _t(
                 group.heading,
                 style: pw.TextStyle(
                   fontWeight: pw.FontWeight.bold,
@@ -358,7 +435,7 @@ class PdfGenerator {
             for (final item in extraInstructions)
               pw.Padding(
                 padding: const pw.EdgeInsets.only(bottom: 2, left: 4),
-                child: pw.Text('-  $item', style: normalStyle),
+                child: _bullet(item, normalStyle),
               ),
           ],
 
@@ -372,7 +449,7 @@ class PdfGenerator {
               if (line.trim().isNotEmpty)
                 pw.Padding(
                   padding: const pw.EdgeInsets.only(bottom: 2, left: 4),
-                  child: pw.Text('-  ${line.trim()}', style: normalStyle),
+                  child: _bullet(line.trim(), normalStyle),
                 ),
           ],
 
@@ -381,13 +458,24 @@ class PdfGenerator {
           pw.Container(height: 1, color: _brand),
           pw.SizedBox(height: 8),
           pw.Center(
-            child: pw.Text(
-              'Thank you for choosing $shopName',
-              style: pw.TextStyle(
-                fontWeight: pw.FontWeight.bold,
-                fontSize: 11,
-                color: _brand,
-              ),
+            // Split so an Urdu shop name does not drag the English sentence
+            // through the bidi pass and come out word-reversed.
+            child: pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.center,
+              children: [
+                pw.Text('Thank you for choosing ',
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 11,
+                      color: _brand,
+                    )),
+                _t(shopName,
+                    style: pw.TextStyle(
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 11,
+                      color: _brand,
+                    )),
+              ],
             ),
           ),
           pw.SizedBox(height: 2),
@@ -447,7 +535,7 @@ class PdfGenerator {
             ),
           ),
           pw.Expanded(
-            child: pw.Text(
+            child: _t(
               value,
               style: pw.TextStyle(
                 fontSize: 10,
@@ -470,7 +558,7 @@ class PdfGenerator {
             color: _mutedDark,
           ),
         ),
-        pw.Text(
+        _t(
           value,
           style: pw.TextStyle(
             fontSize: 10,
@@ -495,7 +583,7 @@ class PdfGenerator {
             width: 120,
             child: pw.Text('$key:', style: boldStyle),
           ),
-          pw.Expanded(child: pw.Text(value, style: normalStyle)),
+          pw.Expanded(child: _t(value, style: normalStyle)),
         ],
       ),
     );
@@ -557,11 +645,7 @@ class PdfGenerator {
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(
                     horizontal: 8, vertical: 4),
-                child: pw.Text(
-                  GarmentLabels.fieldLabel(entries[i].key, labels,
-                      urduSnapshot: urduLabels),
-                  style: const pw.TextStyle(fontSize: 10),
-                ),
+                child: _labelCell(entries[i].key, labels, urduLabels),
               ),
               pw.Padding(
                 padding: const pw.EdgeInsets.symmetric(
@@ -679,17 +763,37 @@ class PdfGenerator {
           pw.SizedBox(height: 2),
           ...validEntries.map((e) {
             final displayValue = _formatOptionValue(e.value);
+            // Name and value are rendered as their own runs: either can be
+            // Urdu, and a single mixed string would be reordered as a whole.
             return pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 2),
-              child: pw.Text(
-                '${GarmentLabels.fieldLabel(e.key, labels, urduSnapshot: urduLabels)}'
-                ': $displayValue',
-                style: const pw.TextStyle(fontSize: 10),
+              child: pw.Row(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  _labelCell(e.key, labels, urduLabels),
+                  pw.Text(':  ', style: const pw.TextStyle(fontSize: 10)),
+                  pw.Expanded(
+                    child: _t(displayValue,
+                        style: const pw.TextStyle(fontSize: 10)),
+                  ),
+                ],
               ),
             );
           }),
         ],
       ),
+    );
+  }
+
+  /// A bulleted instruction line. The dash is its own run so a dictated Urdu
+  /// instruction does not carry it to the wrong end of the line.
+  static pw.Widget _bullet(String text, pw.TextStyle style) {
+    return pw.Row(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        pw.Text('-  ', style: style),
+        pw.Expanded(child: _t(text, style: style)),
+      ],
     );
   }
 
