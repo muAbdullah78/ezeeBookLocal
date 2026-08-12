@@ -1176,6 +1176,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                   // Tailor-defined fields are named by the snapshot saved with
                   // the order, not by the built-in key table.
                   final labels = GarmentLabels.labelSnapshot(rawOptions);
+                  final urduLabels =
+                      GarmentLabels.urduLabelSnapshot(rawOptions);
                   final options = GarmentLabels.visibleOptions(rawOptions);
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -1207,8 +1209,8 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                     children: [
                                       Expanded(
                                         child: Text(
-                                          GarmentLabels.fieldLabel(
-                                              e.key, labels),
+                                          GarmentLabels.fieldLabel(e.key, labels,
+                                              urduSnapshot: urduLabels),
                                           style: const TextStyle(
                                             fontSize: 12,
                                             color: AppColors.textSecondary,
@@ -1241,7 +1243,7 @@ class _OrderViewScreenState extends State<OrderViewScreen> {
                                   padding:
                                       const EdgeInsets.only(bottom: 2),
                                   child: Text(
-                                    '${GarmentLabels.fieldLabel(e.key, labels)}: '
+                                    '${GarmentLabels.fieldLabel(e.key, labels, urduSnapshot: urduLabels)}: '
                                     '${_optionText(e.value)}',
                                     style: const TextStyle(
                                       fontSize: 12,

@@ -18,6 +18,12 @@ class MeasurementMetaKeys {
   /// `{field_key: label}` for every field in the group.
   static const String labels = '_labels';
 
+  /// `{field_key: urdu_label}` for the fields that have one.
+  ///
+  /// Kept separate from [labels] rather than replacing it so receipts printed
+  /// before this existed still resolve their field names.
+  static const String labelsUrdu = '_labels_ur';
+
   /// Display name of the group (the category name at the time of the order).
   static const String section = '_section';
 

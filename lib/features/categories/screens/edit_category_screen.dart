@@ -163,7 +163,14 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
   // ==================== SAVE ====================
 
   Future<void> _save() async {
-    final name = _name.text.trim();
+    var name = _name.text.trim();
+    final urdu = _nameUrdu.text.trim();
+
+    // Either name is enough. A shop that works only in Urdu should not be made
+    // to type Urdu into the English box to satisfy a validator — when only the
+    // Urdu name is given it becomes the category's name, so the order screen
+    // and every receipt have something real to print.
+    if (name.isEmpty && urdu.isNotEmpty) name = urdu;
     if (name.isEmpty) {
       SnackbarHelper.showError(context, 'category_name_required'.tr());
       return;
@@ -172,7 +179,6 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
     setState(() => _saving = true);
 
     try {
-      final urdu = _nameUrdu.text.trim();
       final existing = widget.category;
       final category = StitchCategory(
         id: _categoryId,
@@ -326,7 +332,7 @@ class _EditCategoryScreenState extends State<EditCategoryScreen> {
               _textInput(
                 _nameUrdu,
                 hint: 'optional'.tr(),
-                fontFamily: 'NotoNastaliqUrdu',
+                fontFamily: 'NotoNaskhArabic',
                 onChanged: (_) => _markDirty(),
               ),
               const SizedBox(height: 16),

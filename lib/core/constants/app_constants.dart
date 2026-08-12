@@ -1,6 +1,6 @@
 /// Application version. Keep in sync with pubspec.yaml `version:`.
 /// When bumping pubspec version, update this value too.
-const String kAppVersion = '2.1.0';
+const String kAppVersion = '2.2.0';
 
 /// Fixed primary-key used for the single local shop profile row.
 ///

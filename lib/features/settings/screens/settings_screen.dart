@@ -267,8 +267,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       fontSize: 16,
                       color: AppColors.textPrimary,
                       fontFamily:
-                          option.$1 == 'ur' ? 'NotoNastaliqUrdu' : null,
-                      height: option.$1 == 'ur' ? 2.0 : null,
+                          option.$1 == 'ur' ? 'NotoNaskhArabic' : null,
+                      height: option.$1 == 'ur' ? 1.5 : null,
                     ),
                   ),
                 ],

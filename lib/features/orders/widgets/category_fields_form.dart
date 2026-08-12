@@ -126,22 +126,31 @@ class CategoryFieldValues {
       }
     }
     if (opts.isEmpty) return opts;
-
-    opts[MeasurementMetaKeys.labels] = <String, String>{
-      for (final f in fields) f.fieldKey: f.label,
-    };
-    opts[MeasurementMetaKeys.section] = sectionName;
+    opts.addAll(_labelSnapshot(sectionName));
     return opts;
   }
 
   /// Label snapshot for a group that has numeric measurements but no options —
   /// without it the receipt would print raw storage keys.
-  Map<String, dynamic> labelOnlyOptions({required String sectionName}) => {
-        MeasurementMetaKeys.labels: <String, String>{
-          for (final f in fields) f.fieldKey: f.label,
-        },
-        MeasurementMetaKeys.section: sectionName,
-      };
+  Map<String, dynamic> labelOnlyOptions({required String sectionName}) =>
+      _labelSnapshot(sectionName);
+
+  /// Both spellings of every field name, so the receipt can print whichever the
+  /// tailor entered — or both, when they entered both.
+  Map<String, dynamic> _labelSnapshot(String sectionName) {
+    final urdu = <String, String>{};
+    for (final f in fields) {
+      final u = f.labelUrdu?.trim() ?? '';
+      if (u.isNotEmpty) urdu[f.fieldKey] = u;
+    }
+    return {
+      MeasurementMetaKeys.labels: <String, String>{
+        for (final f in fields) f.fieldKey: f.label,
+      },
+      if (urdu.isNotEmpty) MeasurementMetaKeys.labelsUrdu: urdu,
+      MeasurementMetaKeys.section: sectionName,
+    };
+  }
 
   void dispose() {
     for (final c in controllers.values) {
@@ -311,7 +320,7 @@ class CategoryFieldsGroup extends StatelessWidget {
               hintText: field.labelUrdu ?? '',
               hintStyle: const TextStyle(
                 fontSize: 13,
-                fontFamily: 'NotoNastaliqUrdu',
+                fontFamily: 'NotoNaskhArabic',
                 color: AppColors.textHint,
               ),
               suffixText: 'inches'.tr(),
@@ -415,7 +424,7 @@ class CategoryFieldsGroup extends StatelessWidget {
                 hintText: field.labelUrdu ?? '',
                 hintStyle: const TextStyle(
                   fontSize: 13,
-                  fontFamily: 'NotoNastaliqUrdu',
+                  fontFamily: 'NotoNaskhArabic',
                   color: AppColors.textHint,
                 ),
                 isDense: true,

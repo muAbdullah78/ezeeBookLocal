@@ -1,4 +1,4 @@
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
@@ -46,6 +46,9 @@ class _DisclaimerScreenState extends State<DisclaimerScreen> {
               ),
               const SizedBox(height: 16),
               RichText(
+                // The logo is a name, not translated text: keep it
+                // left-to-right so Urdu mode does not render "BookEzee".
+                textDirection: TextDirection.ltr,
                 text: const TextSpan(
                   children: [
                     TextSpan(
