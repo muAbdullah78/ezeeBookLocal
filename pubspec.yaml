@@ -1,11 +1,12 @@
 name: ezeebook
 description: "EzeeBook - Tailor Shop Management App"
 publish_to: 'none'
-# Bump BOTH the name (2.1.0) and the build number (+8) for every build handed
-# to a shop. Android compares the build number to decide whether an install is
-# an update, and the name is what Settings → About shows the tailor, so it is
-# how you know which shop is running what.
-version: 2.1.0+8
+# Bump BOTH the name and the build number for every build handed to a shop, and
+# keep `kAppVersion` in lib/core/constants/app_constants.dart in step. Android
+# compares the build number to decide whether an install is an update, and the
+# name is what Settings → About shows the tailor, so it is how you know which
+# shop is running what.
+version: 2.2.0+9
 
 environment:
   sdk: ^3.7.0
@@ -65,8 +66,17 @@ flutter:
     - lib/l10n/
 
   fonts:
-    - family: NotoNastaliqUrdu
+    # Urdu face for the whole app AND the PDF receipt.
+    #
+    # This was Noto Nastaliq. Nastaliq is beautiful for print but wrong here for
+    # two concrete reasons: it has none of the 141 Arabic Presentation Forms-B
+    # codepoints (U+FE70-FEFF) that the `pdf` package's Arabic shaper emits, so
+    # every Urdu word on a receipt came out as scattered dots; and as a
+    # calligraphic display face it reads as heavy and cramped at UI sizes.
+    # Noto Naskh Arabic covers those forms, covers Latin as well, and is a text
+    # face meant to be read small.
+    - family: NotoNaskhArabic
       fonts:
-        - asset: assets/fonts/NotoNastaliqUrdu-Regular.ttf
-        - asset: assets/fonts/NotoNastaliqUrdu-Bold.ttf
+        - asset: assets/fonts/NotoNaskhArabic-Regular.ttf
+        - asset: assets/fonts/NotoNaskhArabic-Bold.ttf
           weight: 700

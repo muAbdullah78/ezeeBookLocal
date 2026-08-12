@@ -1,7 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import '../../../core/constants/app_colors.dart';
 import '../../../core/database/sync_service.dart';
 import '../../../core/services/backup_service.dart';
@@ -326,7 +326,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Row(
         children: [
           Expanded(
-            child: Row(
+            // The name is split across two Text widgets to weight "Ezee" and
+            // "Book" differently. In a right-to-left locale the Row would lay
+            // them out in reverse and the logo read "BookEzee", so the brand is
+            // pinned left-to-right — it is a name, not translated text.
+            child: Directionality(
+              textDirection: TextDirection.ltr,
+              child: Row(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
@@ -363,6 +369,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               ],
+              ),
             ),
           ),
         ],
@@ -474,9 +481,9 @@ Widget _buildQuickActions(BuildContext context) {
                         'نیا گاہک شامل کریں',
                         style: TextStyle(
                           fontSize: 11,
-                          fontFamily: 'NotoNastaliqUrdu',
+                          fontFamily: 'NotoNaskhArabic',
                           color: Colors.white.withValues(alpha: 0.7),
-                          height: 1.8,
+                          height: 1.4,
                         ),
                       ),
                     ],
@@ -543,9 +550,9 @@ Widget _buildQuickActions(BuildContext context) {
                         'نیا آرڈر دیں',
                         style: TextStyle(
                           fontSize: 11,
-                          fontFamily: 'NotoNastaliqUrdu',
+                          fontFamily: 'NotoNaskhArabic',
                           color: AppColors.primary.withValues(alpha: 0.7),
-                          height: 1.8,
+                          height: 1.4,
                         ),
                       ),
                     ],

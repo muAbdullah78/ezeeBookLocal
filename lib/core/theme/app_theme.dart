@@ -8,40 +8,44 @@ class AppTheme {
   ///
   /// Urdu needs its own font: the default Android face (Roboto) has no
   /// Arabic-script glyphs, so switching the app to Urdu without this renders
-  /// every label as empty boxes. Noto Nastaliq is already bundled for the
-  /// Urdu hints and the PDF, so it is reused here for the whole UI.
+  /// every label as empty boxes.
   static ThemeData forLocale(Locale locale) =>
       locale.languageCode == 'ur' ? urduTheme : lightTheme;
 
+  /// The Urdu face, used for the app and the PDF receipt alike.
+  ///
+  /// Noto **Naskh** Arabic, not Nastaliq. Nastaliq is the more beautiful script
+  /// and the one Urdu books are set in, but it is a calligraphic display face:
+  /// at UI sizes its steep diagonal baselines read as heavy and cluttered, and
+  /// its bold weight is heavier still. Naskh is a text face — horizontal
+  /// baseline, even weight, meant to be read small — which is what a shop
+  /// screen and a printed receipt both need.
+  static const String _urduFontFamily = 'NotoNaskhArabic';
+
   /// Urdu variant of [lightTheme].
   ///
-  /// Nastaliq is a tall, sloping script — at the same line height as Latin
-  /// text its descenders clip. The extra leading applied here is the same
-  /// allowance the hand-written Urdu labels elsewhere in the app already use.
+  /// Arabic script sits taller than Latin at the same point size, so it wants a
+  /// little extra leading — but only a little. The generous allowance this
+  /// previously used was there to stop Nastaliq's descenders clipping; applied
+  /// to Naskh it just made every screen look loose and unfinished.
   static ThemeData get urduTheme {
     final base = lightTheme;
+    // Naskh's own metrics are close to Latin, so it needs no size correction.
+    TextTheme urdu(TextTheme t) =>
+        t.apply(fontFamily: _urduFontFamily, heightDelta: 0.15);
+
     return base.copyWith(
-      textTheme: base.textTheme.apply(
-        fontFamily: _urduFontFamily,
-        fontSizeFactor: 0.95,
-        heightDelta: 0.6,
-      ),
-      primaryTextTheme: base.primaryTextTheme.apply(
-        fontFamily: _urduFontFamily,
-        fontSizeFactor: 0.95,
-        heightDelta: 0.6,
-      ),
+      textTheme: urdu(base.textTheme),
+      primaryTextTheme: urdu(base.primaryTextTheme),
       appBarTheme: base.appBarTheme.copyWith(
         titleTextStyle: base.appBarTheme.titleTextStyle?.copyWith(
           fontFamily: _urduFontFamily,
-          fontSize: 18,
-          height: 1.9,
+          fontSize: 19,
+          height: 1.35,
         ),
       ),
     );
   }
-
-  static const String _urduFontFamily = 'NotoNastaliqUrdu';
 
   static ThemeData get lightTheme {
     return ThemeData(

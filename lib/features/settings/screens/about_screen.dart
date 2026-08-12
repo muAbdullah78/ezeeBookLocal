@@ -1,4 +1,4 @@
-import 'package:easy_localization/easy_localization.dart';
+import 'package:easy_localization/easy_localization.dart' hide TextDirection;
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
@@ -54,6 +54,9 @@ class AboutScreen extends StatelessWidget {
           const SizedBox(height: 16),
           Center(
             child: RichText(
+                // The logo is a name, not translated text: keep it
+                // left-to-right so Urdu mode does not render "BookEzee".
+                textDirection: TextDirection.ltr,
               text: const TextSpan(
                 children: [
                   TextSpan(

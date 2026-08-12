@@ -261,6 +261,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
     // Tailor-defined fields are named by the snapshot saved with the order; the
     // reserved bookkeeping entries must not be listed as instructions.
     final labels = GarmentLabels.labelSnapshot(rawOptions);
+    final urduLabels = GarmentLabels.urduLabelSnapshot(rawOptions);
     final options = GarmentLabels.visibleOptions(rawOptions);
 
     return Container(
@@ -328,7 +329,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                                 children: [
                                   Expanded(
                                     child: Text(
-                                      GarmentLabels.fieldLabel(e.key, labels),
+                                      GarmentLabels.fieldLabel(e.key, labels, urduSnapshot: urduLabels),
                                       style: const TextStyle(
                                         fontSize: 12,
                                         color: AppColors.textSecondary,
@@ -355,7 +356,7 @@ class _CustomerProfileScreenState extends State<CustomerProfileScreen> {
                     ...options.entries.map((e) => Padding(
                           padding: const EdgeInsets.only(bottom: 2),
                           child: Text(
-                            '${GarmentLabels.fieldLabel(e.key, labels)}: '
+                            '${GarmentLabels.fieldLabel(e.key, labels, urduSnapshot: urduLabels)}: '
                             '${_optionValue(e.value)}',
                             style: const TextStyle(
                                 fontSize: 12, color: AppColors.textSecondary),

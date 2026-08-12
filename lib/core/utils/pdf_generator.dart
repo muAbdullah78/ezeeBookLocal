@@ -8,31 +8,66 @@ import 'app_logger.dart';
 import 'garment_labels.dart';
 
 class PdfGenerator {
-  /// Urdu glyphs for the receipt.
+  /// The receipt font.
   ///
-  /// The built-in Helvetica faces contain no Arabic-script glyphs, so any
-  /// Urdu the tailor typed — instructions, a colour name, an Urdu shop or
-  /// customer name — silently dropped out of the worker's copy. These are
-  /// registered as a fallback so Latin text keeps its existing look while
-  /// Urdu still renders.
+  /// Noto Naskh Arabic is used as the document's **base** font — for the Latin
+  /// text too, which it covers in full. That is not a stylistic choice, it is
+  /// the only arrangement that works:
+  ///
+  ///  * The `pdf` package shapes Arabic by rewriting letters into the Arabic
+  ///    Presentation Forms-B block (U+FE70–FEFF). It only does this for the
+  ///    base font, so an Urdu font registered as a `fontFallback` produces
+  ///    unjoined, unreadable output (dart_pdf issue #1743).
+  ///  * Nastaliq, which this used before, contains **none** of those 141
+  ///    codepoints — it composes its letterforms from ligatures instead. Every
+  ///    shaped Urdu word therefore mapped to missing glyphs, and receipts came
+  ///    out as scattered dots wherever the tailor had typed Urdu: shop name,
+  ///    customer name, garment, measurement labels.
+  ///
+  /// Helvetica stays registered as a fallback for anything Naskh lacks. That
+  /// direction is safe: Latin needs no shaping.
   static pw.Font? _urduFont;
-  static bool _urduFontLoadAttempted = false;
+  static pw.Font? _urduFontBold;
+  static bool _fontLoadAttempted = false;
 
-  static Future<void> _ensureUrduFont() async {
-    if (_urduFontLoadAttempted) return;
-    _urduFontLoadAttempted = true;
+  static Future<void> _ensureFonts() async {
+    if (_fontLoadAttempted) return;
+    _fontLoadAttempted = true;
     try {
       _urduFont = pw.Font.ttf(
-          await rootBundle.load('assets/fonts/NotoNastaliqUrdu-Regular.ttf'));
+          await rootBundle.load('assets/fonts/NotoNaskhArabic-Regular.ttf'));
+      _urduFontBold = pw.Font.ttf(
+          await rootBundle.load('assets/fonts/NotoNaskhArabic-Bold.ttf'));
     } catch (e, st) {
-      // Never block a receipt on a missing font — fall back to Latin-only.
+      // Never block a receipt on a missing font. Without it Urdu will not
+      // render, but the order still prints in Latin.
       AppLogger.error('PdfGenerator', 'Urdu font load failed',
           error: e, stackTrace: st);
     }
   }
 
-  static List<pw.Font> get _fallback =>
-      _urduFont == null ? const [] : [_urduFont!];
+  /// Document theme: Urdu-capable base font where available, Helvetica if the
+  /// asset could not be read.
+  static pw.ThemeData _buildTheme() {
+    final base = _urduFont;
+    final bold = _urduFontBold ?? _urduFont;
+    if (base == null) {
+      return pw.ThemeData.withFont(
+        base: pw.Font.helvetica(),
+        bold: pw.Font.helveticaBold(),
+        italic: pw.Font.helveticaOblique(),
+      );
+    }
+    return pw.ThemeData.withFont(
+      base: base,
+      bold: bold,
+      // Naskh ships no italic face; reusing the upright one is better than
+      // letting the package synthesise a slant across Arabic joins.
+      italic: base,
+      boldItalic: bold,
+      fontFallback: [pw.Font.helvetica(), pw.Font.helveticaBold()],
+    );
+  }
 
   /// SQLite has no boolean type, so flags round-trip as `1`/`0` (and cloud
   /// backups may carry real bools or strings). Comparing such a value with
@@ -78,23 +113,15 @@ class PdfGenerator {
     List<String>? extraInstructions,
     String? specialInstructions,
   }) async {
-    await _ensureUrduFont();
+    await _ensureFonts();
 
-    final pdf = pw.Document(
-      theme: pw.ThemeData.withFont(
-        base: pw.Font.helvetica(),
-        bold: pw.Font.helveticaBold(),
-        italic: pw.Font.helveticaOblique(),
-        fontFallback: _fallback,
-      ),
-    );
+    final pdf = pw.Document(theme: _buildTheme());
 
     final boldStyle = pw.TextStyle(
       fontSize: 11,
       fontWeight: pw.FontWeight.bold,
-      fontFallback: _fallback,
     );
-    final normalStyle = pw.TextStyle(fontSize: 11, fontFallback: _fallback);
+    final normalStyle = pw.TextStyle(fontSize: 11);
     final headerStyle = pw.TextStyle(
       fontSize: 14,
       fontWeight: pw.FontWeight.bold,
@@ -135,6 +162,8 @@ class PdfGenerator {
               g['additionalOptions'] as Map<String, dynamic>?),
           labels: GarmentLabels.labelSnapshot(
               g['additionalOptions'] as Map<String, dynamic>?),
+          urduLabels: GarmentLabels.urduLabelSnapshot(
+              g['additionalOptions'] as Map<String, dynamic>?),
         ),
     ];
 
@@ -159,8 +188,7 @@ class PdfGenerator {
             child: pw.Text(
               shopName,
               style: pw.TextStyle(
-                font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+                fontWeight: pw.FontWeight.bold,
                 fontSize: 24,
                 color: _brand,
                 letterSpacing: 0.5,
@@ -176,8 +204,6 @@ class PdfGenerator {
                   if (phone.isNotEmpty) phone,
                 ].join('  |  '),
                 style: pw.TextStyle(
-                  font: pw.Font.helvetica(),
-                fontFallback: _fallback,
                   fontSize: 10,
                   color: _muted,
                 ),
@@ -196,8 +222,7 @@ class PdfGenerator {
                 child: pw.Text(
                   'ORDER RECEIPT',
                   style: pw.TextStyle(
-                    font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+                    fontWeight: pw.FontWeight.bold,
                     fontSize: 11,
                     color: _brand,
                     letterSpacing: 2,
@@ -277,16 +302,17 @@ class PdfGenerator {
               pw.Text(
                 group.heading,
                 style: pw.TextStyle(
-                  font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+                  fontWeight: pw.FontWeight.bold,
                   fontSize: 12,
                   color: _brand,
                 ),
               ),
               pw.SizedBox(height: 4),
-              _buildMeasurementsTable(group.measurements, group.labels),
+              _buildMeasurementsTable(
+                  group.measurements, group.labels, group.urduLabels),
               if (group.options.isNotEmpty)
-                _buildAdditionalOptionsBlock(group.options, group.labels),
+                _buildAdditionalOptionsBlock(
+                    group.options, group.labels, group.urduLabels),
             ],
             pw.SizedBox(height: 6),
           ],
@@ -358,8 +384,7 @@ class PdfGenerator {
             child: pw.Text(
               'Thank you for choosing $shopName',
               style: pw.TextStyle(
-                font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+                fontWeight: pw.FontWeight.bold,
                 fontSize: 11,
                 color: _brand,
               ),
@@ -370,8 +395,7 @@ class PdfGenerator {
             child: pw.Text(
               'Generated by EzeeBook  |  ${_formatDateForFooter()}',
               style: pw.TextStyle(
-                font: pw.Font.helveticaOblique(),
-                fontFallback: _fallback,
+                fontStyle: pw.FontStyle.italic,
                 fontSize: 8,
                 color: _footerGrey,
               ),
@@ -402,8 +426,7 @@ class PdfGenerator {
     return pw.Text(
       text,
       style: pw.TextStyle(
-        font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+        fontWeight: pw.FontWeight.bold,
         fontSize: 12,
         color: _brand,
       ),
@@ -419,8 +442,7 @@ class PdfGenerator {
           pw.Text(
             '$label: ',
             style: pw.TextStyle(
-              font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+              fontWeight: pw.FontWeight.bold,
               fontSize: 10,
             ),
           ),
@@ -428,8 +450,6 @@ class PdfGenerator {
             child: pw.Text(
               value,
               style: pw.TextStyle(
-                font: pw.Font.helvetica(),
-                fontFallback: _fallback,
                 fontSize: 10,
               ),
             ),
@@ -445,8 +465,7 @@ class PdfGenerator {
         pw.Text(
           '$label: ',
           style: pw.TextStyle(
-            font: pw.Font.helveticaBold(),
-                fontFallback: _fallback,
+            fontWeight: pw.FontWeight.bold,
             fontSize: 10,
             color: _mutedDark,
           ),
@@ -454,8 +473,6 @@ class PdfGenerator {
         pw.Text(
           value,
           style: pw.TextStyle(
-            font: pw.Font.helvetica(),
-                fontFallback: _fallback,
             fontSize: 10,
           ),
         ),
@@ -487,6 +504,7 @@ class PdfGenerator {
   static pw.Widget _buildMeasurementsTable(
     Map<String, dynamic> data,
     Map<String, String> labels,
+    Map<String, String> urduLabels,
   ) {
     final entries = data.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
@@ -540,7 +558,8 @@ class PdfGenerator {
                 padding: const pw.EdgeInsets.symmetric(
                     horizontal: 8, vertical: 4),
                 child: pw.Text(
-                  GarmentLabels.fieldLabel(entries[i].key, labels),
+                  GarmentLabels.fieldLabel(entries[i].key, labels,
+                      urduSnapshot: urduLabels),
                   style: const pw.TextStyle(fontSize: 10),
                 ),
               ),
@@ -637,6 +656,7 @@ class PdfGenerator {
   static pw.Widget _buildAdditionalOptionsBlock(
     Map<String, dynamic> options,
     Map<String, String> labels,
+    Map<String, String> urduLabels,
   ) {
     final validEntries = options.entries
         .where((e) => e.value != null && e.value.toString().isNotEmpty)
@@ -662,7 +682,8 @@ class PdfGenerator {
             return pw.Padding(
               padding: const pw.EdgeInsets.only(bottom: 2),
               child: pw.Text(
-                '${GarmentLabels.fieldLabel(e.key, labels)}: $displayValue',
+                '${GarmentLabels.fieldLabel(e.key, labels, urduSnapshot: urduLabels)}'
+                ': $displayValue',
                 style: const pw.TextStyle(fontSize: 10),
               ),
             );
@@ -705,11 +726,13 @@ class _MeasurementGroup {
   final Map<String, dynamic> measurements;
   final Map<String, dynamic> options;
   final Map<String, String> labels;
+  final Map<String, String> urduLabels;
 
   const _MeasurementGroup({
     required this.heading,
     required this.measurements,
     required this.options,
     required this.labels,
+    required this.urduLabels,
   });
 }

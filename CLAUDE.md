@@ -407,3 +407,49 @@ brute-forced instantly. The restore path offers a fresh PIN at the end.
 There is still no login and there should not be: it would need a server holding
 customer measurements, an account, and a recurring fee — the model this app was
 built to escape. The backup file is the tailor's identity.
+
+### 2026-08-12: Urdu actually readable — font swap, PDF shaping, bilingual labels
+
+Field reports from five shops. Everything here came from tailors using the app
+in Urdu on their own phones.
+
+**Urdu was unreadable on every receipt.** Reported as `''''' ,, ''` where the
+shop name, garment and measurement labels should be. Two independent causes,
+both fixed:
+
+1. The `pdf` package shapes Arabic by rewriting letters into the Arabic
+   Presentation Forms-B block (U+FE70–FEFF), and only does so for the document's
+   **base** font — an Urdu font passed as `fontFallback` renders unjoined
+   (dart_pdf #1743). It was a fallback.
+2. **Noto Nastaliq contains none of those 141 codepoints** (verified: 0 of 141;
+   Naskh has all 141). Nastaliq builds letterforms from GSUB ligatures instead,
+   so every shaped word mapped to missing glyphs. No base-font change alone
+   would have fixed it.
+   Also: 14 `pw.Font.helvetica*()` overrides on individual TextStyles were
+   overriding the base font, which is why the *shop name* and *customer name*
+   broke even where other text worked. Replaced with `fontWeight`/`fontStyle`.
+
+**The Urdu face is now Noto Naskh Arabic, everywhere** (`NotoNaskhArabic`,
+Regular + Bold, converted from Google's WOFF since no TTF is served directly).
+Nastaliq is retired. Naskh is a text face: horizontal baseline, even weight,
+readable small, full Latin coverage — which also answers the "Urdu looks too
+bold and messy" complaint. Theme leading dropped from `heightDelta: 0.6` to
+`0.15` and the hard-coded `height: 1.8/2.0` Urdu labels to `1.4/1.5`; that
+generous allowance existed only to stop Nastaliq's descenders clipping.
+
+**Either language is enough for a name.** "Field Name" and "Category Name" were
+mandatory, so a shop working only in Urdu had to type Urdu into the English box
+(then it printed as garbage). Now only one of the two boxes must be filled; the
+Urdu one is promoted to the name when the English one is blank.
+
+**Both names print when both are given.** `_labels_ur` joins `_labels` in the
+measurement snapshot, and the receipt renders `English (اردو)` — combined only
+when the two differ, so an Urdu-only field does not print twice. Old orders
+without the new key still resolve.
+
+**"EzeeBook" read "BookEzee" in Urdu.** The dashboard splits the name across two
+`Text` widgets in a `Row` to weight the halves differently, and RTL reverses Row
+order. The brand is now pinned LTR there and on the about/disclaimer screens.
+
+Note: `easy_localization` exports its own `TextDirection`, so any file using
+`TextDirection` must import it with `hide TextDirection`.

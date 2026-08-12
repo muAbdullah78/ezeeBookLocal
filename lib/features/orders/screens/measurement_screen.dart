@@ -1635,7 +1635,7 @@ class _MeasurementScreenState extends State<MeasurementScreen>
               hintText: field.urduHint,
               hintStyle: const TextStyle(
                 fontSize: 13,
-                fontFamily: 'NotoNastaliqUrdu',
+                fontFamily: 'NotoNaskhArabic',
                 color: AppColors.textHint,
               ),
               suffixText: 'inches'.tr(),

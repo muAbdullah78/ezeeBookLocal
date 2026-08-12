@@ -86,7 +86,15 @@ class _FieldEditorSheetState extends State<_FieldEditorSheet> {
   }
 
   void _save() {
-    final label = _label.text.trim();
+    var label = _label.text.trim();
+    final urdu = _labelUrdu.text.trim();
+
+    // A tailor who works only in Urdu should not have to type Urdu into a box
+    // labelled "Field Name" just to get past a validator. Either name will do;
+    // when only the Urdu one is given it becomes the field's name outright, so
+    // everything downstream — the form, the receipt, the order screen — has
+    // something real to show.
+    if (label.isEmpty && urdu.isNotEmpty) label = urdu;
     if (label.isEmpty) {
       setState(() => _error = 'field_name_required'.tr());
       return;
@@ -104,7 +112,6 @@ class _FieldEditorSheetState extends State<_FieldEditorSheet> {
       }
     }
 
-    final urdu = _labelUrdu.text.trim();
     final group = _group.text.trim();
 
     if (_isEdit) {
@@ -182,7 +189,7 @@ class _FieldEditorSheetState extends State<_FieldEditorSheet> {
               _labelled(
                 'field_name_urdu'.tr(),
                 _input(_labelUrdu,
-                    hint: 'optional'.tr(), fontFamily: 'NotoNastaliqUrdu'),
+                    hint: 'optional'.tr(), fontFamily: 'NotoNaskhArabic'),
               ),
               const SizedBox(height: 12),
               _labelled(

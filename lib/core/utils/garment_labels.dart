@@ -131,10 +131,22 @@ class GarmentLabels {
   ///
   /// A tailor-defined field has no entry in [_measurementLabels] — its name is
   /// whatever the tailor typed — so the snapshot is the only truthful source.
-  static String fieldLabel(String key, Map<String, String>? snapshot) {
-    final s = snapshot?[key]?.trim();
-    if (s != null && s.isNotEmpty) return s;
-    return measurementLabel(key);
+  ///
+  /// When the tailor gave the field both an English and an Urdu name, both are
+  /// shown: the worker who reads the receipt may know only one of them, and
+  /// picking one for them loses information the tailor deliberately entered.
+  /// The two are only combined when they actually differ — a field named in
+  /// Urdu alone has the same string in both places and must not print twice.
+  static String fieldLabel(
+    String key,
+    Map<String, String>? snapshot, {
+    Map<String, String>? urduSnapshot,
+  }) {
+    final primary = snapshot?[key]?.trim() ?? '';
+    final urdu = urduSnapshot?[key]?.trim() ?? '';
+    final base = primary.isNotEmpty ? primary : measurementLabel(key);
+    if (urdu.isEmpty || urdu == base) return base;
+    return '$base ($urdu)';
   }
 
   /// Heading for a measurement group.
@@ -151,8 +163,15 @@ class GarmentLabels {
   }
 
   /// Pull the `{field_key: label}` snapshot out of a decoded options map.
-  static Map<String, String> labelSnapshot(Map<String, dynamic>? options) {
-    final raw = options?[MeasurementMetaKeys.labels];
+  static Map<String, String> labelSnapshot(Map<String, dynamic>? options) =>
+      _stringMap(options?[MeasurementMetaKeys.labels]);
+
+  /// Pull the Urdu label snapshot. Empty for orders saved before it existed.
+  static Map<String, String> urduLabelSnapshot(
+          Map<String, dynamic>? options) =>
+      _stringMap(options?[MeasurementMetaKeys.labelsUrdu]);
+
+  static Map<String, String> _stringMap(Object? raw) {
     if (raw is! Map) return const {};
     final out = <String, String>{};
     raw.forEach((k, v) {

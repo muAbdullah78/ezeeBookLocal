@@ -318,9 +318,9 @@ class _SelectGarmentScreenState extends State<SelectGarmentScreen> {
                         'کیا سینا ہے؟',
                         style: TextStyle(
                           fontSize: 15,
-                          fontFamily: 'NotoNastaliqUrdu',
+                          fontFamily: 'NotoNaskhArabic',
                           color: AppColors.textSecondary,
-                          height: 2.0,
+                          height: 1.5,
                         ),
                         textAlign: TextAlign.center,
                       ),
@@ -412,9 +412,9 @@ class _GarmentCard extends StatelessWidget {
                     urduName,
                     style: const TextStyle(
                       fontSize: 11,
-                      fontFamily: 'NotoNastaliqUrdu',
+                      fontFamily: 'NotoNaskhArabic',
                       color: AppColors.textSecondary,
-                      height: 1.8,
+                      height: 1.4,
                     ),
                     textAlign: TextAlign.center,
                     maxLines: 1,
